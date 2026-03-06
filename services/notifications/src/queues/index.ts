@@ -1,4 +1,4 @@
-import Bull from "bull";
+import Bull = require("bull");
 
 const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
 

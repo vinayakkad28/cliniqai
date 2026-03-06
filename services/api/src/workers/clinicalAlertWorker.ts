@@ -12,7 +12,7 @@
  */
 
 import "dotenv/config";
-import Bull from "bull";
+import Bull = require("bull");
 import { prisma } from "../lib/prisma.js";
 import { aiClient } from "../lib/aiClient.js";
 import { pushAlertQueue } from "../lib/queues.js";

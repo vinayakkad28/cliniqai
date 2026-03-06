@@ -2,7 +2,7 @@
  * Bull queue publishers for the Core API.
  * These queues share the same Redis instance as the notification service workers.
  */
-import Bull from "bull";
+import Bull = require("bull");
 
 const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
 
