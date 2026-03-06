@@ -1,0 +1,27 @@
+{
+  "name": "@cliniqai/notifications",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --project tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "bull": "^4.12.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "handlebars": "^4.7.8",
+    "ioredis": "^5.3.2"
+  },
+  "devDependencies": {
+    "@types/bull": "^4.10.0",
+    "@types/express": "^4.17.21",
+    "@types/handlebars": "^4.1.0",
+    "@types/node": "^20.12.7",
+    "tsx": "^4.8.2",
+    "typescript": "^5.4.5"
+  }
+}

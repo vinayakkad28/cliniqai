@@ -1,0 +1,168 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to deploy (api | web | ai | all)"
+        required: true
+        default: "all"
+        type: choice
+        options: [api, web, ai, all]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: asia-south1
+  AR_REPO: cliniqai  # Artifact Registry repository name
+
+jobs:
+  # ─── Build & Deploy Core API ──────────────────────────────────────────────────
+  deploy-api:
+    name: Deploy Core API
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || inputs.service == 'api' || inputs.service == 'all' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push API image
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/api:${{ github.sha }}"
+          docker build -t "$IMAGE" -f services/api/Dockerfile services/api/
+          docker push "$IMAGE"
+
+      - name: Run DB migrations
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/api:${{ github.sha }}"
+          gcloud run jobs create cliniqai-migrate-${{ github.run_number }} \
+            --image="$IMAGE" \
+            --command="npx" \
+            --args="prisma,migrate,deploy" \
+            --region=${{ env.REGION }} \
+            --set-secrets="DATABASE_URL=cliniqai-db-url:latest" \
+            --max-retries=1 \
+            --execute-now \
+            --wait || true
+
+      - name: Deploy API to Cloud Run
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/api:${{ github.sha }}"
+          gcloud run deploy cliniqai-api \
+            --image="$IMAGE" \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --set-secrets="\
+              DATABASE_URL=cliniqai-db-url:latest,\
+              JWT_SECRET=cliniqai-jwt-secret:latest,\
+              JWT_REFRESH_SECRET=cliniqai-jwt-refresh:latest,\
+              AI_INTERNAL_TOKEN=cliniqai-internal-token:latest,\
+              MSG91_API_KEY=cliniqai-msg91-key:latest,\
+              ENCRYPTION_KEY=cliniqai-encryption-key:latest" \
+            --set-env-vars="\
+              NODE_ENV=production,\
+              AI_SERVICE_URL=https://cliniqai-ai-${{ env.PROJECT_ID }}.run.app,\
+              FHIR_SERVICE_URL=https://cliniqai-fhir-${{ env.PROJECT_ID }}.run.app,\
+              ALLOWED_ORIGINS=https://app.cliniqai.in,\
+              GCS_BUCKET=cliniqai-documents-prod" \
+            --min-instances=1 \
+            --max-instances=10 \
+            --memory=512Mi \
+            --cpu=1 \
+            --concurrency=100 \
+            --timeout=30
+
+  # ─── Build & Deploy Web App ───────────────────────────────────────────────────
+  deploy-web:
+    name: Deploy Web App
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || inputs.service == 'web' || inputs.service == 'all' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push Web image
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/web:${{ github.sha }}"
+          docker build -t "$IMAGE" \
+            --build-arg NEXT_PUBLIC_API_URL=https://api.cliniqai.in/api \
+            -f apps/web/Dockerfile apps/web/
+          docker push "$IMAGE"
+
+      - name: Deploy Web to Cloud Run
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/web:${{ github.sha }}"
+          gcloud run deploy cliniqai-web \
+            --image="$IMAGE" \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --min-instances=1 \
+            --max-instances=10 \
+            --memory=512Mi \
+            --cpu=1
+
+  # ─── Build & Deploy AI Service ────────────────────────────────────────────────
+  deploy-ai:
+    name: Deploy AI Service
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || inputs.service == 'ai' || inputs.service == 'all' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push AI image
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/ai:${{ github.sha }}"
+          docker build -t "$IMAGE" -f services/ai/Dockerfile services/ai/
+          docker push "$IMAGE"
+
+      - name: Deploy AI to Cloud Run
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/ai:${{ github.sha }}"
+          gcloud run deploy cliniqai-ai \
+            --image="$IMAGE" \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --no-allow-unauthenticated \
+            --set-secrets="AI_INTERNAL_TOKEN=cliniqai-internal-token:latest" \
+            --set-env-vars="\
+              ENVIRONMENT=production,\
+              GOOGLE_CLOUD_PROJECT_ID=${{ env.PROJECT_ID }},\
+              VERTEX_AI_LOCATION=us-central1" \
+            --service-account=cliniqai-ai@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --min-instances=0 \
+            --max-instances=5 \
+            --memory=2Gi \
+            --cpu=2 \
+            --concurrency=4 \
+            --timeout=120

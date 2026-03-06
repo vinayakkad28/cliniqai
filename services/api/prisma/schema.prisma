@@ -1,0 +1,576 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema", "postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  schemas    = ["auth", "clinic", "patients", "appointments", "consultations", "prescriptions", "billing", "pharmacy", "labs", "documents", "ai", "org"]
+  extensions = [pgvector(map: "vector", schema: "public")]
+}
+
+// ─────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────
+
+enum UserRole {
+  doctor
+  nurse
+  admin
+  receptionist
+  patient
+
+  @@schema("auth")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String?  @unique
+  phone        String   @unique
+  passwordHash String?  @map("password_hash")
+  role         UserRole @default(doctor)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+  doctor        Doctor?
+  patient       Patient?
+
+  @@map("users")
+  @@schema("auth")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+  @@schema("auth")
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  phone     String
+  codeHash  String   @map("code_hash")
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("otp_codes")
+  @@schema("auth")
+}
+
+// ─────────────────────────────────────────
+// CLINIC
+// ─────────────────────────────────────────
+
+enum DayOfWeek {
+  monday
+  tuesday
+  wednesday
+  thursday
+  friday
+  saturday
+  sunday
+
+  @@schema("clinic")
+}
+
+model Doctor {
+  id            String   @id @default(uuid())
+  userId        String   @unique @map("user_id")
+  name          String
+  specialties   String[]
+  licenseNumber String   @map("license_number")
+  bio           String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinicDoctors ClinicDoctor[]
+  workingHours  WorkingHours[]
+  appointments  Appointment[]
+  consultations Consultation[]
+  prescriptions Prescription[]
+  invoices      Invoice[]
+
+  @@map("doctors")
+  @@schema("clinic")
+}
+
+model Clinic {
+  id         String   @id @default(uuid())
+  name       String
+  address    String
+  gstNumber  String?  @map("gst_number")
+  logoUrl    String?  @map("logo_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  clinicDoctors    ClinicDoctor[]
+  appointmentQueue AppointmentQueue[]
+  inventory        Inventory[]
+
+  @@map("clinics")
+  @@schema("clinic")
+}
+
+model ClinicDoctor {
+  clinicId String @map("clinic_id")
+  doctorId String @map("doctor_id")
+  role     String @default("doctor")
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@id([clinicId, doctorId])
+  @@map("clinic_doctors")
+  @@schema("clinic")
+}
+
+model WorkingHours {
+  id               String    @id @default(uuid())
+  doctorId         String    @map("doctor_id")
+  dayOfWeek        DayOfWeek @map("day_of_week")
+  startTime        String    @map("start_time")
+  endTime          String    @map("end_time")
+  slotDurationMins Int       @default(15) @map("slot_duration_mins")
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@map("working_hours")
+  @@schema("clinic")
+}
+
+// ─────────────────────────────────────────
+// PATIENTS
+// ─────────────────────────────────────────
+
+model Patient {
+  id                String   @id @default(uuid())
+  userId            String?  @unique @map("user_id")
+  fhirPatientId     String   @unique @map("fhir_patient_id")
+  phone             String   @unique
+  createdByDoctorId String?  @map("created_by_doctor_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user          User?              @relation(fields: [userId], references: [id])
+  tags          PatientTag[]
+  appointments  Appointment[]
+  consultations Consultation[]
+  prescriptions Prescription[]
+  invoices      Invoice[]
+  labOrders     LabOrder[]
+  queueEntries  AppointmentQueue[]
+
+  @@map("patients")
+  @@schema("patients")
+}
+
+model PatientTag {
+  patientId String @map("patient_id")
+  tag       String
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@id([patientId, tag])
+  @@map("patient_tags")
+  @@schema("patients")
+}
+
+// ─────────────────────────────────────────
+// APPOINTMENTS
+// ─────────────────────────────────────────
+
+enum AppointmentStatus {
+  scheduled
+  confirmed
+  in_progress
+  completed
+  cancelled
+  no_show
+
+  @@schema("appointments")
+}
+
+enum AppointmentType {
+  scheduled
+  walk_in
+  follow_up
+  teleconsult
+
+  @@schema("appointments")
+}
+
+model Appointment {
+  id          String            @id @default(uuid())
+  patientId   String            @map("patient_id")
+  doctorId    String            @map("doctor_id")
+  scheduledAt DateTime          @map("scheduled_at")
+  status      AppointmentStatus @default(scheduled)
+  type        AppointmentType   @default(scheduled)
+  notes       String?
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  patient      Patient       @relation(fields: [patientId], references: [id])
+  doctor       Doctor        @relation(fields: [doctorId], references: [id])
+  consultation Consultation?
+
+  @@map("appointments")
+  @@schema("appointments")
+}
+
+model AppointmentQueue {
+  id          String   @id @default(uuid())
+  clinicId    String   @map("clinic_id")
+  patientId   String   @map("patient_id")
+  tokenNumber Int      @map("token_number")
+  arrivedAt   DateTime @default(now()) @map("arrived_at")
+  status      String   @default("waiting")
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("appointment_queue")
+  @@schema("appointments")
+}
+
+// ─────────────────────────────────────────
+// CONSULTATIONS
+// ─────────────────────────────────────────
+
+enum ConsultationStatus {
+  in_progress
+  completed
+  cancelled
+
+  @@schema("consultations")
+}
+
+model Consultation {
+  id              String             @id @default(uuid())
+  appointmentId   String             @unique @map("appointment_id")
+  doctorId        String             @map("doctor_id")
+  patientId       String             @map("patient_id")
+  fhirEncounterId String?            @unique @map("fhir_encounter_id")
+  startedAt       DateTime           @default(now()) @map("started_at")
+  endedAt         DateTime?          @map("ended_at")
+  chiefComplaint  String?            @map("chief_complaint")
+  notes           String?
+  status          ConsultationStatus @default(in_progress)
+
+  appointment   Appointment    @relation(fields: [appointmentId], references: [id])
+  doctor        Doctor         @relation(fields: [doctorId], references: [id])
+  patient       Patient        @relation(fields: [patientId], references: [id])
+  prescriptions Prescription[]
+  invoices      Invoice[]
+  labOrders     LabOrder[]
+
+  @@map("consultations")
+  @@schema("consultations")
+}
+
+// ─────────────────────────────────────────
+// PRESCRIPTIONS
+// ─────────────────────────────────────────
+
+enum PrescriptionStatus {
+  draft
+  sent
+  dispensed
+  cancelled
+
+  @@schema("prescriptions")
+}
+
+model Prescription {
+  id                      String             @id @default(uuid())
+  consultationId          String             @map("consultation_id")
+  patientId               String             @map("patient_id")
+  doctorId                String             @map("doctor_id")
+  fhirMedicationRequestId String?            @unique @map("fhir_medication_request_id")
+  sentVia                 String?            @map("sent_via")
+  sentAt                  DateTime?          @map("sent_at")
+  pdfUrl                  String?            @map("pdf_url")
+  status                  PrescriptionStatus @default(draft)
+  createdAt               DateTime           @default(now()) @map("created_at")
+
+  consultation Consultation @relation(fields: [consultationId], references: [id])
+  patient      Patient      @relation(fields: [patientId], references: [id])
+  doctor       Doctor       @relation(fields: [doctorId], references: [id])
+  dispensing   Dispensing[]
+
+  @@map("prescriptions")
+  @@schema("prescriptions")
+}
+
+// ─────────────────────────────────────────
+// BILLING
+// ─────────────────────────────────────────
+
+enum InvoiceStatus {
+  pending
+  paid
+  partially_paid
+  cancelled
+  refunded
+
+  @@schema("billing")
+}
+
+model Invoice {
+  id             String        @id @default(uuid())
+  consultationId String        @map("consultation_id")
+  patientId      String        @map("patient_id")
+  doctorId       String        @map("doctor_id")
+  amount         Decimal       @db.Decimal(10, 2)
+  gstAmount      Decimal       @default(0) @map("gst_amount") @db.Decimal(10, 2)
+  total          Decimal       @db.Decimal(10, 2)
+  status         InvoiceStatus @default(pending)
+  paidAt         DateTime?     @map("paid_at")
+  paymentMethod  String?       @map("payment_method")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  consultation   Consultation    @relation(fields: [consultationId], references: [id])
+  patient        Patient         @relation(fields: [patientId], references: [id])
+  doctor         Doctor          @relation(fields: [doctorId], references: [id])
+  paymentMethods PaymentRecord[]
+
+  @@map("invoices")
+  @@schema("billing")
+}
+
+model PaymentRecord {
+  id            String   @id @default(uuid())
+  invoiceId     String   @map("invoice_id")
+  provider      String
+  transactionId String   @map("transaction_id")
+  amount        Decimal  @db.Decimal(10, 2)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@map("payment_methods")
+  @@schema("billing")
+}
+
+// ─────────────────────────────────────────
+// PHARMACY
+// ─────────────────────────────────────────
+
+model Medicine {
+  id           String  @id @default(uuid())
+  name         String
+  genericName  String? @map("generic_name")
+  manufacturer String?
+  form         String?
+  strength     String?
+  unit         String?
+
+  inventory  Inventory[]
+  dispensing Dispensing[]
+
+  @@map("medicines")
+  @@schema("pharmacy")
+}
+
+model Inventory {
+  id            String    @id @default(uuid())
+  clinicId      String    @map("clinic_id")
+  medicineId    String    @map("medicine_id")
+  stockQuantity Int       @default(0) @map("stock_quantity")
+  reorderLevel  Int       @default(10) @map("reorder_level")
+  expiryDate    DateTime? @map("expiry_date")
+  batchNumber   String?   @map("batch_number")
+  costPrice     Decimal?  @map("cost_price") @db.Decimal(10, 2)
+  sellingPrice  Decimal?  @map("selling_price") @db.Decimal(10, 2)
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  clinic   Clinic   @relation(fields: [clinicId], references: [id])
+  medicine Medicine @relation(fields: [medicineId], references: [id])
+
+  @@map("inventory")
+  @@schema("pharmacy")
+}
+
+model Dispensing {
+  id                String   @id @default(uuid())
+  prescriptionId    String   @map("prescription_id")
+  medicineId        String   @map("medicine_id")
+  quantityDispensed Int      @map("quantity_dispensed")
+  dispensedAt       DateTime @default(now()) @map("dispensed_at")
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id])
+  medicine     Medicine     @relation(fields: [medicineId], references: [id])
+
+  @@map("dispensing")
+  @@schema("pharmacy")
+}
+
+// ─────────────────────────────────────────
+// LABS
+// ─────────────────────────────────────────
+
+enum LabOrderStatus {
+  pending
+  collected
+  processing
+  completed
+  cancelled
+
+  @@schema("labs")
+}
+
+model LabOrder {
+  id                   String         @id @default(uuid())
+  consultationId       String         @map("consultation_id")
+  patientId            String         @map("patient_id")
+  tests                String[]
+  status               LabOrderStatus @default(pending)
+  fhirServiceRequestId String?        @unique @map("fhir_service_request_id")
+  createdAt            DateTime       @default(now()) @map("created_at")
+
+  consultation Consultation @relation(fields: [consultationId], references: [id])
+  patient      Patient      @relation(fields: [patientId], references: [id])
+  results      LabResult[]
+
+  @@map("lab_orders")
+  @@schema("labs")
+}
+
+model LabResult {
+  id                     String   @id @default(uuid())
+  labOrderId             String   @map("lab_order_id")
+  fhirDiagnosticReportId String?  @unique @map("fhir_diagnostic_report_id")
+  resultFileUrl          String?  @map("result_file_url")
+  uploadedAt             DateTime @default(now()) @map("uploaded_at")
+  aiSummary              String?  @map("ai_summary")
+
+  labOrder LabOrder @relation(fields: [labOrderId], references: [id])
+
+  @@map("lab_results")
+  @@schema("labs")
+}
+
+// ─────────────────────────────────────────
+// ORGANIZATIONS (Phase 4 — multi-tenancy)
+// ─────────────────────────────────────────
+
+enum SubscriptionTier {
+  solo
+  clinic
+  hospital
+  enterprise
+
+  @@schema("org")
+}
+
+model Organization {
+  id               String           @id @default(uuid())
+  name             String
+  gstin            String?
+  subscriptionTier SubscriptionTier @default(solo) @map("subscription_tier")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  @@map("organizations")
+  @@schema("org")
+}
+
+// ─────────────────────────────────────────
+// DOCUMENTS (Phase 2 — Document Intelligence)
+// ─────────────────────────────────────────
+
+enum DocumentType {
+  lab_report
+  prescription_external
+  discharge_summary
+  imaging
+  insurance
+  other
+
+  @@schema("documents")
+}
+
+enum DocumentStatus {
+  uploaded
+  processing
+  extracted
+  failed
+
+  @@schema("documents")
+}
+
+model Document {
+  id                 String         @id @default(uuid())
+  patientId          String         @map("patient_id")
+  uploadedByDoctorId String         @map("uploaded_by_doctor_id")
+  gcsPath            String         @map("gcs_path")
+  fileName           String         @map("file_name")
+  mimeType           String         @map("mime_type")
+  type               DocumentType   @default(other)
+  status             DocumentStatus @default(uploaded)
+  extractedData      Json?          @map("extracted_data")
+  aiSummary          String?        @map("ai_summary")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  embeddings DocumentEmbedding[]
+
+  @@map("documents")
+  @@schema("documents")
+}
+
+model DocumentEmbedding {
+  id          String                      @id @default(uuid())
+  documentId  String                      @map("document_id")
+  chunkIndex  Int                         @map("chunk_index")
+  chunkText   String                      @map("chunk_text")
+  embedding   Unsupported("vector(768)")?
+  createdAt   DateTime                    @default(now()) @map("created_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_embeddings")
+  @@schema("documents")
+}
+
+// ─────────────────────────────────────────
+// AI INSIGHTS (Phase 2/3 — AI-generated clinical intelligence)
+// ─────────────────────────────────────────
+
+enum AiInsightType {
+  diagnosis_suggestion
+  drug_interaction
+  lab_interpretation
+  clinical_alert
+  discharge_summary
+  longitudinal_summary
+  document_extraction
+
+  @@schema("ai")
+}
+
+model AiInsight {
+  id             String        @id @default(uuid())
+  patientId      String        @map("patient_id")
+  consultationId String?       @map("consultation_id")
+  documentId     String?       @map("document_id")
+  type           AiInsightType
+  content        String
+  metadata       Json?
+  // Doctor must explicitly approve before insight is acted upon (compliance)
+  doctorApproved Boolean?      @map("doctor_approved")
+  approvedAt     DateTime?     @map("approved_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@map("ai_insights")
+  @@schema("ai")
+}

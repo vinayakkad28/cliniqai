@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "CliniqAI",
+    "slug": "cliniqai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1d4ed8"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cliniqai.doctor"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1d4ed8"
+      },
+      "package": "com.cliniqai.doctor"
+    },
+    "plugins": ["expo-router"],
+    "scheme": "cliniqai"
+  }
+}

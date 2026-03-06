@@ -1,0 +1,97 @@
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import morgan from "morgan";
+
+import { authRouter } from "./routes/auth.js";
+import { doctorsRouter } from "./routes/doctors.js";
+import { patientsRouter } from "./routes/patients.js";
+import { appointmentsRouter } from "./routes/appointments.js";
+import { consultationsRouter } from "./routes/consultations.js";
+import { prescriptionsRouter } from "./routes/prescriptions.js";
+import { billingRouter } from "./routes/billing.js";
+import { pharmacyRouter } from "./routes/pharmacy.js";
+import { labsRouter } from "./routes/labs.js";
+import { notificationsRouter } from "./routes/notifications.js";
+import { adminRouter } from "./routes/admin.js";
+import { documentsRouter } from "./routes/documents.js";
+import { insightsRouter } from "./routes/insights.js";
+import { organizationsRouter } from "./routes/organizations.js";
+import { abdmRouter, abdmCallbackRouter } from "./routes/abdm.js";
+import { auditLogger } from "./middleware/auditLogger.js";
+import { apiRateLimiter } from "./middleware/rateLimiter.js";
+
+// Prevent unhandled rejections from crashing the process in dev
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+});
+
+const app = express();
+const PORT = process.env["PORT"] ?? 3001;
+
+// Security headers
+app.use(helmet());
+
+// CORS
+const allowedOrigins = (process.env["ALLOWED_ORIGINS"] ?? "http://localhost:3000").split(",");
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  }),
+);
+
+// Request parsing
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+// HTTP request logging (no PHI — morgan uses predefined tokens only)
+app.use(morgan("[:date[iso]] :method :url :status :response-time ms"));
+
+// Rate limiting
+app.use("/api", apiRateLimiter);
+
+// Audit logging (every authenticated request)
+app.use("/api", auditLogger);
+
+// Health check (unauthenticated)
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", service: "cliniqai-api", timestamp: new Date().toISOString() });
+});
+
+// API routes
+app.use("/api/auth", authRouter);
+app.use("/api/doctors", doctorsRouter);
+app.use("/api/patients", patientsRouter);
+app.use("/api/appointments", appointmentsRouter);
+app.use("/api/consultations", consultationsRouter);
+app.use("/api/prescriptions", prescriptionsRouter);
+app.use("/api/billing", billingRouter);
+app.use("/api/pharmacy", pharmacyRouter);
+app.use("/api/labs", labsRouter);
+app.use("/api/notifications", notificationsRouter);
+app.use("/api/admin", adminRouter);
+app.use("/api/documents", documentsRouter);
+app.use("/api/insights", insightsRouter);
+app.use("/api/organizations", organizationsRouter);
+app.use("/api/abdm", abdmRouter);
+// ABDM gateway callback — unauthenticated, whitelist in prod by IP
+app.use("/api/abdm/callback", abdmCallbackRouter);
+
+// 404 handler
+app.use((_req, res) => {
+  res.status(404).json({ error: "Not found" });
+});
+
+// Global error handler
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(err.stack);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+app.listen(PORT, () => {
+  console.log(`[api] CliniqAI API running on http://localhost:${PORT}`);
+});
+
+export default app;
