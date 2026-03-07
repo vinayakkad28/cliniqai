@@ -5,7 +5,6 @@ import logging
 
 import google.generativeai as genai
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from google.generativeai import types as genai_types
 from pydantic import BaseModel
 
 from app.config import settings
@@ -100,19 +99,17 @@ async def transcribe_voice(audio: UploadFile = File(...)) -> TranscribeResponse:
 
     try:
         genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
 
-        audio_part = genai_types.Part(
-            inline_data=genai_types.Blob(
-                mime_type=mime_type,
-                data=base64.b64encode(audio_bytes).decode("utf-8"),
-            )
-        )
-        prompt_part = genai_types.Part(
-            text=(
-                "Transcribe this medical voice dictation exactly as spoken. "
-                "The doctor is dictating a prescription. Return only the transcribed text."
-            )
+        audio_part = {
+            "inline_data": {
+                "mime_type": mime_type,
+                "data": base64.b64encode(audio_bytes).decode("utf-8"),
+            }
+        }
+        prompt_part = (
+            "Transcribe this medical voice dictation exactly as spoken. "
+            "The doctor is dictating a prescription. Return only the transcribed text."
         )
         response = model.generate_content([audio_part, prompt_part])
         transcript = response.text.strip()
