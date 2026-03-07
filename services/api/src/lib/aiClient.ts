@@ -8,14 +8,23 @@ const INTERNAL_TOKEN = process.env["AI_INTERNAL_TOKEN"] ?? process.env["INTERNAL
 const IS_DEV = process.env["NODE_ENV"] === "development";
 
 async function aiPost<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${AI_SERVICE_URL}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Internal-Token": INTERNAL_TOKEN,
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+
+  let res: Response;
+  try {
+    res = await fetch(`${AI_SERVICE_URL}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Token": INTERNAL_TOKEN,
+      },
+      signal: controller.signal,
+      body: JSON.stringify(body),
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const text = await res.text();

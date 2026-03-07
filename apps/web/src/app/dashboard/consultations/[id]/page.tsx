@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { consultations } from "@/lib/api";
+import { consultations, telemedicine } from "@/lib/api";
 
 const AI_BASE = process.env["NEXT_PUBLIC_AI_URL"] ?? "http://localhost:8001";
 
@@ -17,7 +17,7 @@ interface ConsultationDetail {
   notes?: string;
   status: string;
   prescriptions: Array<{ id: string; status: string; sentAt?: string }>;
-  labOrders: Array<{ id: string; tests: string[]; status: string }>;
+  labOrders: Array<{ id: string; tests: string[]; status: string; results?: unknown[] }>;
   invoices: Array<{ id: string; total: string; status: string }>;
 }
 
@@ -26,6 +26,7 @@ interface DiagnosisSuggestion {
   icd10_code: string;
   probability: string;
   rationale: string;
+  suggested_workup?: string[];
 }
 
 interface NotesStructured {
@@ -56,6 +57,12 @@ export default function ConsultationPage({ params }: { params: { id: string } })
   const [notesAiLoading, setNotesAiLoading] = useState(false);
 
   const [endLoading, setEndLoading] = useState(false);
+
+  // Telemedicine
+  const [telemedicineUrl, setTelemedicineUrl] = useState<string | null>(null);
+  const [telemedicineLoading, setTelemedicineLoading] = useState(false);
+  const [showFrame, setShowFrame] = useState(false);
+  const [telemedicineError, setTelemedicineError] = useState("");
 
   useEffect(() => {
     consultations
@@ -91,6 +98,21 @@ export default function ConsultationPage({ params }: { params: { id: string } })
     }
   }
 
+  async function handleStartVideoCall() {
+    setTelemedicineLoading(true);
+    setTelemedicineError("");
+    try {
+      const room = await telemedicine.createRoom(id);
+      setTelemedicineUrl(room.roomUrl);
+      setShowFrame(true);
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message ?? "";
+      setTelemedicineError(msg.includes("503") ? "Telemedicine not configured — add DAILY_API_KEY to API env" : "Failed to create video room");
+    } finally {
+      setTelemedicineLoading(false);
+    }
+  }
+
   async function handleDiagnosisSuggest() {
     if (!diagnosisInput.trim()) return;
     setDiagnosisLoading(true);
@@ -100,11 +122,14 @@ export default function ConsultationPage({ params }: { params: { id: string } })
       const res = await fetch(`${AI_BASE}/diagnosis/suggest`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Internal-Token": token },
-        body: JSON.stringify({ symptoms: diagnosisInput, patient_id: consultation?.patientId }),
+        body: JSON.stringify({
+          symptoms: diagnosisInput.split(/[,\n]/).map((s) => s.trim()).filter(Boolean),
+          patient_id: consultation?.patientId,
+        }),
       });
       if (res.ok) {
         const data = await res.json();
-        setDiagnosisSuggestions(data.suggestions ?? []);
+        setDiagnosisSuggestions(data.differential ?? data.suggestions ?? []);
       }
     } finally {
       setDiagnosisLoading(false);
@@ -152,16 +177,71 @@ export default function ConsultationPage({ params }: { params: { id: string } })
             {consultation.status.replace("_", " ")}
           </span>
         </div>
-        {isActive && (
-          <button
-            onClick={handleEnd}
-            disabled={endLoading}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-          >
-            {endLoading ? "Ending…" : "End Consultation"}
-          </button>
-        )}
+        <div className="flex gap-2">
+          {isActive && !telemedicineUrl && (
+            <button
+              type="button"
+              onClick={handleStartVideoCall}
+              disabled={telemedicineLoading}
+              className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60"
+            >
+              {telemedicineLoading ? "Creating room…" : "📹 Start Video Call"}
+            </button>
+          )}
+          {telemedicineUrl && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowFrame(!showFrame)}
+                className="rounded-lg border border-teal-300 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-100"
+              >
+                {showFrame ? "Minimize" : "Show Video"}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(telemedicineUrl)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Copy Link
+              </button>
+            </>
+          )}
+          {isActive && (
+            <button
+              onClick={handleEnd}
+              disabled={endLoading}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+            >
+              {endLoading ? "Ending…" : "End Consultation"}
+            </button>
+          )}
+          {!isActive && (
+            <a
+              href={`/dashboard/consultations/${id}/discharge`}
+              className="rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+            >
+              📄 Discharge Summary
+            </a>
+          )}
+        </div>
       </div>
+
+      {telemedicineError && (
+        <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+          {telemedicineError}
+        </div>
+      )}
+
+      {telemedicineUrl && showFrame && (
+        <div className="mb-6 rounded-xl overflow-hidden border border-teal-200 shadow-sm">
+          <iframe
+            src={telemedicineUrl}
+            allow="camera; microphone; fullscreen; speaker; display-capture"
+            style={{ width: "100%", height: 480, border: "none" }}
+            title="Video Consultation"
+          />
+        </div>
+      )}
 
       {consultation.chiefComplaint && (
         <div className="mb-4 rounded-lg bg-yellow-50 border border-yellow-200 px-4 py-3 text-sm text-yellow-800">
@@ -206,6 +286,12 @@ export default function ConsultationPage({ params }: { params: { id: string } })
               count={consultation.labOrders.length}
               href={`/dashboard/consultations/${id}/labs/new`}
               addLabel={isActive ? "+ Add" : undefined}
+              items={consultation.labOrders.map((o) => ({
+                id: o.id,
+                href: `/dashboard/consultations/${id}/labs/${o.id}`,
+                label: o.tests.slice(0, 2).join(", ") + (o.tests.length > 2 ? "…" : ""),
+                badge: o.status,
+              }))}
             />
             <SummaryCard
               label="Invoices"
@@ -243,7 +329,10 @@ export default function ConsultationPage({ params }: { params: { id: string } })
                       <p className="text-sm font-medium text-gray-900">{d.condition}</p>
                       <span className="text-xs font-mono text-gray-400 ml-2 shrink-0">{d.icd10_code}</span>
                     </div>
-                    <p className="mt-0.5 text-xs text-gray-500">{d.probability} probability — {d.rationale}</p>
+                    <p className="mt-0.5 text-xs text-gray-500 capitalize">{d.probability} probability — {d.rationale}</p>
+                    {d.suggested_workup && d.suggested_workup.length > 0 && (
+                      <p className="mt-0.5 text-xs text-blue-600">Workup: {d.suggested_workup.join(", ")}</p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -287,14 +376,32 @@ export default function ConsultationPage({ params }: { params: { id: string } })
 }
 
 function SummaryCard({
-  label, count, href, addLabel,
-}: { label: string; count: number; href: string; addLabel?: string }) {
+  label, count, href, addLabel, items,
+}: {
+  label: string;
+  count: number;
+  href: string;
+  addLabel?: string;
+  items?: Array<{ id: string; href: string; label: string; badge: string }>;
+}) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm text-center">
-      <p className="text-2xl font-bold text-gray-900">{count}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <p className="text-2xl font-bold text-gray-900 text-center">{count}</p>
+      <p className="text-xs text-gray-500 mt-0.5 text-center">{label}</p>
+      {items && items.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {items.map((item) => (
+            <a key={item.id} href={item.href} className="flex items-center justify-between text-xs text-gray-600 hover:text-blue-600 truncate">
+              <span className="truncate">{item.label}</span>
+              <span className={`ml-1 shrink-0 rounded-full px-1.5 py-0.5 text-xs font-medium ${item.badge === "completed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+                {item.badge}
+              </span>
+            </a>
+          ))}
+        </div>
+      )}
       {addLabel && (
-        <a href={href} className="mt-2 block text-xs text-blue-600 hover:underline">{addLabel}</a>
+        <a href={href} className="mt-2 block text-xs text-blue-600 hover:underline text-center">{addLabel}</a>
       )}
     </div>
   );

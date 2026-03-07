@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { billing } from "@/lib/api";
 
+const BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001/api";
+
 interface Invoice {
   id: string;
   consultationId: string;
@@ -44,6 +46,24 @@ export default function BillingPage() {
   const [revenue, setRevenue] = useState<RevenueData | null>(null);
   const [loading, setLoading] = useState(true);
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExportCsv() {
+    setExporting(true);
+    try {
+      const token = localStorage.getItem("cliniqai_access_token") ?? "";
+      const url = `${BASE}/billing/invoices/export?from=${from}&to=${to}${statusFilter ? `&status=${statusFilter}` : ""}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `invoices-${from}-to-${to}.csv`;
+      a.click();
+    } finally {
+      setExporting(false);
+    }
+  }
 
   useEffect(() => {
     billing.revenue({ from, to }).then((r) => setRevenue(r as RevenueData)).catch(() => null);
@@ -80,7 +100,17 @@ export default function BillingPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">Billing</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Billing</h1>
+        <button
+          type="button"
+          onClick={handleExportCsv}
+          disabled={exporting}
+          className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {exporting ? "Exporting…" : "⬇ Export CSV"}
+        </button>
+      </div>
 
       {/* Revenue summary */}
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -136,20 +166,30 @@ export default function BillingPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {inv.status === "pending" && (
-                      <button
-                        onClick={() => handleMarkPaid(inv)}
-                        disabled={markingId === inv.id}
-                        className="text-xs text-green-600 hover:underline disabled:opacity-50"
+                    <div className="flex items-center gap-3">
+                      {inv.status === "pending" && (
+                        <button
+                          onClick={() => handleMarkPaid(inv)}
+                          disabled={markingId === inv.id}
+                          className="text-xs text-green-600 hover:underline disabled:opacity-50"
+                        >
+                          {markingId === inv.id ? "Saving…" : "Mark Paid"}
+                        </button>
+                      )}
+                      {inv.status === "paid" && (
+                        <span className="text-xs text-gray-400">
+                          {inv.paymentMethod} · {inv.paidAt ? new Date(inv.paidAt).toLocaleDateString("en-IN") : ""}
+                        </span>
+                      )}
+                      <a
+                        href={`/dashboard/billing/invoices/${inv.id}/print`}
+                        target="_blank"
+                        className="text-xs text-gray-400 hover:text-gray-700"
+                        title="Print Invoice"
                       >
-                        {markingId === inv.id ? "Saving…" : "Mark Paid"}
-                      </button>
-                    )}
-                    {inv.status === "paid" && (
-                      <span className="text-xs text-gray-400">
-                        {inv.paymentMethod} · {inv.paidAt ? new Date(inv.paidAt).toLocaleDateString("en-IN") : ""}
-                      </span>
-                    )}
+                        🖨
+                      </a>
+                    </div>
                   </td>
                 </tr>
               ))}

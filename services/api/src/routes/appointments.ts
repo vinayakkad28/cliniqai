@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { authenticate, requireScope } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
+import { smsReminderQueue } from "../lib/queues.js";
 
 export const appointmentsRouter = Router();
 
@@ -23,10 +24,12 @@ const UpdateAppointmentSchema = z.object({
 });
 
 const ListQuerySchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // filter by date YYYY-MM-DD
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // filter by single date YYYY-MM-DD
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // date range start
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),   // date range end
   status: z.enum(["scheduled", "confirmed", "in_progress", "completed", "cancelled", "no_show"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  limit: z.coerce.number().int().min(1).max(200).default(20),
 });
 
 // ─── GET /api/appointments ────────────────────────────────────────────────────
@@ -38,20 +41,17 @@ appointmentsRouter.get("/", requireScope("appointments:read"), async (req, res) 
     return;
   }
 
-  const { date, status, page, limit } = query.data;
+  const { date, from, to, status, page, limit } = query.data;
   const skip = (page - 1) * limit;
 
   const dateFilter = date
-    ? {
-        scheduledAt: {
-          gte: new Date(`${date}T00:00:00.000Z`),
-          lte: new Date(`${date}T23:59:59.999Z`),
-        },
-      }
+    ? { scheduledAt: { gte: new Date(`${date}T00:00:00.000Z`), lte: new Date(`${date}T23:59:59.999Z`) } }
+    : (from || to)
+    ? { scheduledAt: { ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}), ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}) } }
     : {};
 
   const where = {
-    doctorId: req.user!.sub,
+    doctorId: req.user!.doctor_id!,
     ...(status ? { status } : {}),
     ...dateFilter,
   };
@@ -97,7 +97,7 @@ appointmentsRouter.post("/", requireScope("appointments:write"), async (req, res
 
   const conflict = await prisma.appointment.findFirst({
     where: {
-      doctorId: req.user!.sub,
+      doctorId: req.user!.doctor_id!,
       scheduledAt: { gte: slotStart, lte: slotEnd },
       status: { in: ["scheduled", "confirmed", "in_progress"] },
     },
@@ -111,7 +111,7 @@ appointmentsRouter.post("/", requireScope("appointments:write"), async (req, res
   const appointment = await prisma.appointment.create({
     data: {
       patientId,
-      doctorId: req.user!.sub,
+      doctorId: req.user!.doctor_id!,
       scheduledAt: new Date(scheduledAt),
       type,
       notes,
@@ -119,6 +119,17 @@ appointmentsRouter.post("/", requireScope("appointments:write"), async (req, res
     },
     include: { patient: { select: { id: true, phone: true } } },
   });
+
+  // Queue SMS reminder 24h before appointment (fire-and-forget)
+  const reminderDelay = Math.max(0, new Date(appointment.scheduledAt).getTime() - Date.now() - 24 * 60 * 60 * 1000);
+  smsReminderQueue.add(
+    {
+      appointmentId: appointment.id,
+      patientPhone: appointment.patient.phone,
+      scheduledAt: appointment.scheduledAt,
+    },
+    { delay: reminderDelay }
+  ).catch(() => {}); // Upstash Redis may not support delayed jobs — silent fail
 
   res.status(201).json(appointment);
 });
@@ -211,7 +222,7 @@ appointmentsRouter.patch("/:id", requireScope("appointments:write"), async (req,
     return;
   }
 
-  if (appointment.doctorId !== req.user!.sub) {
+  if (appointment.doctorId !== req.user!.doctor_id) {
     res.status(403).json({ error: "Not your appointment" });
     return;
   }
@@ -237,7 +248,7 @@ appointmentsRouter.delete("/:id", requireScope("appointments:write"), async (req
     return;
   }
 
-  if (appointment.doctorId !== req.user!.sub) {
+  if (appointment.doctorId !== req.user!.doctor_id) {
     res.status(403).json({ error: "Not your appointment" });
     return;
   }

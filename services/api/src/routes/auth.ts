@@ -38,7 +38,12 @@ const RefreshSchema = z.object({
 
 async function issueTokenPair(userId: string, role: string, clinicId?: string) {
   const scope = ROLE_SCOPES[role] ?? [];
-  const accessToken = signAccessToken({ sub: userId, role, clinic_id: clinicId, scope });
+  let doctorId: string | undefined;
+  if (role === "doctor") {
+    const doctor = await prisma.doctor.findUnique({ where: { userId }, select: { id: true } });
+    doctorId = doctor?.id;
+  }
+  const accessToken = signAccessToken({ sub: userId, role, clinic_id: clinicId, doctor_id: doctorId, scope });
   const refreshToken = signRefreshToken(userId);
 
   const tokenHash = crypto.createHash("sha256").update(refreshToken).digest("hex");

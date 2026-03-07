@@ -30,8 +30,8 @@ export const ROLE_SCOPES: Record<string, string[]> = {
     "prescriptions:read", "prescriptions:write",
     "appointments:read", "appointments:write",
     "consultations:read", "consultations:write",
-    "billing:read", "labs:read", "labs:write",
-    "pharmacy:read",
+    "billing:read", "billing:write", "labs:read", "labs:write",
+    "pharmacy:read", "pharmacy:write",
   ],
   nurse: [
     "patients:read", "appointments:read", "appointments:write", "vitals:write",

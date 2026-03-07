@@ -19,6 +19,7 @@ import { documentsRouter } from "./routes/documents.js";
 import { insightsRouter } from "./routes/insights.js";
 import { organizationsRouter } from "./routes/organizations.js";
 import { abdmRouter, abdmCallbackRouter } from "./routes/abdm.js";
+import { clinicRouter } from "./routes/clinic.js";
 import { auditLogger } from "./middleware/auditLogger.js";
 import { apiRateLimiter } from "./middleware/rateLimiter.js";
 
@@ -75,6 +76,7 @@ app.use("/api/admin", adminRouter);
 app.use("/api/documents", documentsRouter);
 app.use("/api/insights", insightsRouter);
 app.use("/api/organizations", organizationsRouter);
+app.use("/api/clinic", clinicRouter);
 app.use("/api/abdm", abdmRouter);
 // ABDM gateway callback — unauthenticated, whitelist in prod by IP
 app.use("/api/abdm/callback", abdmCallbackRouter);

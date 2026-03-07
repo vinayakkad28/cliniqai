@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import base64
 import logging
 
-from fastapi import APIRouter, Depends, UploadFile, File
+import google.generativeai as genai
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from google.generativeai import types as genai_types
 from pydantic import BaseModel
 
+from app.config import settings
 from app.middleware.auth import verify_internal_token
 from app.services.vertex_client import generate_json_medgemma_4b
 
@@ -35,32 +39,92 @@ class TranscribeResponse(BaseModel):
     confidence: float
 
 
+class StructureRequest(BaseModel):
+    transcript: str
+
+
+class MedicationItem(BaseModel):
+    drug: str
+    dose: str
+    frequency: str
+    duration: str
+    route: str = "oral"
+    additional_instructions: str = ""
+
+
+class StructureResponse(BaseModel):
+    medications: list[MedicationItem]
+    additional_instructions: str = ""
+
+
+@router.post("/structure", response_model=StructureResponse, dependencies=[Depends(verify_internal_token)])
+async def structure_transcript(request: StructureRequest) -> StructureResponse:
+    """
+    Structure a text transcript (from Web Speech API or manual) into medication objects.
+    Uses MedGemma 4B to parse natural language prescription dictation.
+    """
+    result = await generate_json_medgemma_4b(
+        request.transcript,
+        system_instruction=VOICE_STRUCTURE_PROMPT,
+    )
+
+    medications = [
+        MedicationItem(
+            drug=m.get("drug", ""),
+            dose=m.get("dose", ""),
+            frequency=m.get("frequency", ""),
+            duration=m.get("duration", ""),
+            route=m.get("route", "oral"),
+            additional_instructions=m.get("additional_instructions", ""),
+        )
+        for m in result.get("medications", [])
+    ]
+
+    return StructureResponse(
+        medications=medications,
+        additional_instructions=result.get("additional_instructions", ""),
+    )
+
+
 @router.post("/transcribe", response_model=TranscribeResponse, dependencies=[Depends(verify_internal_token)])
 async def transcribe_voice(audio: UploadFile = File(...)) -> TranscribeResponse:
     """
-    Transcribe voice → structured prescription JSON.
-    Pipeline: audio bytes → MedGemma 4B multimodal (audio+text) → structured JSON.
-    Mode: Async streaming (< 5s latency budget).
-
-    Note: MedGemma 4B multimodal accepts audio input directly via Vertex AI.
-    For production, stream the audio in chunks for lower TTFB.
+    Transcribe audio → structured prescription JSON.
+    Pipeline: audio bytes → Gemini Flash 2.0 multimodal → transcript → MedGemma 4B → structured JSON.
     """
+    if not settings.gemini_api_key:
+        raise HTTPException(status_code=503, detail="Gemini API key not configured")
+
     audio_bytes = await audio.read()
+    mime_type = audio.content_type or "audio/webm"
 
-    # MedGemma 4B multimodal: pass audio as inline data
-    # The vertex_client will be extended with multimodal support when MedGemma
-    # audio endpoints are GA. For now, use text prompt with audio metadata.
-    # TODO: replace with actual MedGemma audio endpoint once available
-    prompt = (
-        f"[Audio prescription dictation, {len(audio_bytes)} bytes, "
-        f"format: {audio.content_type}]. "
-        "Extract the prescription details from this dictation."
-    )
+    try:
+        genai.configure(api_key=settings.gemini_api_key)
+        model = genai.GenerativeModel("gemini-2.0-flash")
 
-    structured = await generate_json_medgemma_4b(prompt, system_instruction=VOICE_STRUCTURE_PROMPT)
+        audio_part = genai_types.Part(
+            inline_data=genai_types.Blob(
+                mime_type=mime_type,
+                data=base64.b64encode(audio_bytes).decode("utf-8"),
+            )
+        )
+        prompt_part = genai_types.Part(
+            text=(
+                "Transcribe this medical voice dictation exactly as spoken. "
+                "The doctor is dictating a prescription. Return only the transcribed text."
+            )
+        )
+        response = model.generate_content([audio_part, prompt_part])
+        transcript = response.text.strip()
+    except Exception as exc:
+        logger.error("Gemini audio transcription failed: %s", exc)
+        raise HTTPException(status_code=502, detail=f"Audio transcription failed: {exc}") from exc
+
+    # Pipe transcript through existing structure logic
+    structured = await generate_json_medgemma_4b(transcript, system_instruction=VOICE_STRUCTURE_PROMPT)
 
     return TranscribeResponse(
-        transcript=prompt,
+        transcript=transcript,
         structured=structured,
-        confidence=0.85,
+        confidence=0.9,
     )

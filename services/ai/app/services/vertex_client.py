@@ -38,15 +38,19 @@ async def _call_gemini(
     model_name: str,
 ) -> str:
     genai = _get_genai()
+    # Gemma models don't support system_instruction — merge into prompt
+    is_gemma = model_name.startswith("gemma")
+    sys_instr = None if is_gemma else system_instruction
+    full_prompt = f"{system_instruction}\n\n{prompt}" if is_gemma and system_instruction else prompt
     model = genai.GenerativeModel(
         model_name=model_name,
-        system_instruction=system_instruction,
+        system_instruction=sys_instr,
         generation_config=genai.types.GenerationConfig(
             temperature=temperature,
             max_output_tokens=max_output_tokens,
         ),
     )
-    response = model.generate_content(prompt)
+    response = model.generate_content(full_prompt)
     return response.text
 
 
@@ -93,7 +97,7 @@ async def generate_medgemma_4b(
 ) -> str:
     if _use_vertex():
         return await _call_vertex(prompt, system_instruction, temperature, max_output_tokens, settings.medgemma_4b_endpoint)
-    return await _call_gemini(prompt, system_instruction, temperature, max_output_tokens, "gemini-1.5-flash")
+    return await _call_gemini(prompt, system_instruction, temperature, max_output_tokens, "gemma-3-12b-it")
 
 
 async def generate_medgemma_27b(
@@ -104,7 +108,7 @@ async def generate_medgemma_27b(
 ) -> str:
     if _use_vertex():
         return await _call_vertex(prompt, system_instruction, temperature, max_output_tokens, settings.medgemma_27b_endpoint)
-    return await _call_gemini(prompt, system_instruction, temperature, max_output_tokens, "gemini-1.5-pro")
+    return await _call_gemini(prompt, system_instruction, temperature, max_output_tokens, "gemma-3-27b-it")
 
 
 async def generate_json_medgemma_4b(

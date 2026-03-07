@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
+import crypto from "node:crypto";
 
 export const doctorsRouter = Router();
 
@@ -112,6 +113,80 @@ doctorsRouter.put("/me/working-hours", async (req, res) => {
   ]);
 
   res.json({ replaced: hours[1].count });
+});
+
+// ─── Staff management ────────────────────────────────────────────────────────
+
+const StaffCreateSchema = z.object({
+  phone: z.string().regex(/^\+?[0-9]{10,15}$/, "Invalid phone"),
+  name: z.string().min(2).max(100),
+  role: z.enum(["nurse", "receptionist", "admin"]),
+});
+
+// GET /api/doctors/staff — list staff invited by this doctor
+doctorsRouter.get("/staff", async (req, res) => {
+  const doctorId = req.user!.doctor_id;
+  if (!doctorId) { res.status(403).json({ error: "Doctor profile required" }); return; }
+
+  const staff = await prisma.user.findMany({
+    where: { invitedByDoctorId: doctorId, active: true },
+    select: { id: true, phone: true, name: true, role: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+  res.json({ data: staff });
+});
+
+// POST /api/doctors/staff — create a staff account
+doctorsRouter.post("/staff", async (req, res) => {
+  const doctorId = req.user!.doctor_id;
+  if (!doctorId) { res.status(403).json({ error: "Doctor profile required" }); return; }
+
+  const parsed = StaffCreateSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(422).json({ error: parsed.error.flatten() }); return; }
+
+  const { phone, name, role } = parsed.data;
+
+  const existing = await prisma.user.findUnique({ where: { phone } });
+  if (existing) {
+    res.status(409).json({ error: "Phone number already registered" });
+    return;
+  }
+
+  // Generate a temporary setup code (6 digits) — displayed once to the doctor
+  const setupCode = String(crypto.randomInt(100000, 999999));
+  const codeHash = crypto.createHash("sha256").update(setupCode).digest("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  const user = await prisma.user.create({
+    data: { phone, name, role, invitedByDoctorId: doctorId },
+  });
+
+  // Store the setup code as an OTP so staff can log in
+  await prisma.otpCode.create({
+    data: { phone, codeHash, expiresAt },
+  });
+
+  res.status(201).json({
+    id: user.id,
+    phone: user.phone,
+    name: user.name,
+    role: user.role,
+    setupCode, // shown once — staff uses this as their first login OTP
+  });
+});
+
+// DELETE /api/doctors/staff/:userId — deactivate a staff account
+doctorsRouter.delete("/staff/:userId", async (req, res) => {
+  const doctorId = req.user!.doctor_id;
+  if (!doctorId) { res.status(403).json({ error: "Doctor profile required" }); return; }
+
+  const staff = await prisma.user.findFirst({
+    where: { id: req.params["userId"], invitedByDoctorId: doctorId },
+  });
+  if (!staff) { res.status(404).json({ error: "Staff member not found" }); return; }
+
+  await prisma.user.update({ where: { id: staff.id }, data: { active: false } });
+  res.json({ message: "Staff account deactivated" });
 });
 
 // GET /api/doctors/:id — clinic admin / receptionist use

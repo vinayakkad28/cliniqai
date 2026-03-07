@@ -41,7 +41,7 @@ consultationsRouter.post("/", requireScope("consultations:write"), async (req, r
     return;
   }
 
-  if (appointment.doctorId !== req.user!.sub) {
+  if (appointment.doctorId !== req.user!.doctor_id!) {
     res.status(403).json({ error: "Not your appointment" });
     return;
   }
@@ -54,7 +54,7 @@ consultationsRouter.post("/", requireScope("consultations:write"), async (req, r
   // Create FHIR Encounter
   const fhirEncounter = await fhirClient.createEncounter({
     patientFhirId: appointment.patient.fhirPatientId,
-    practitionerId: req.user!.sub,
+    practitionerId: req.user!.doctor_id!,
     startedAt: new Date().toISOString(),
     chiefComplaint,
   }).catch(() => null);
@@ -68,7 +68,7 @@ consultationsRouter.post("/", requireScope("consultations:write"), async (req, r
   const consultation = await prisma.consultation.create({
     data: {
       appointmentId,
-      doctorId: req.user!.sub,
+      doctorId: req.user!.doctor_id!,
       patientId: appointment.patientId,
       fhirEncounterId: fhirEncounter?.id ?? null,
       chiefComplaint,
@@ -77,6 +77,37 @@ consultationsRouter.post("/", requireScope("consultations:write"), async (req, r
   });
 
   res.status(201).json(consultation);
+});
+
+// ─── GET /api/consultations — List ───────────────────────────────────────────
+
+consultationsRouter.get("/", requireScope("consultations:read"), async (req, res) => {
+  const { patientId, status, page = "1", limit = "20" } = req.query as Record<string, string>;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  const where = {
+    doctorId: req.user!.doctor_id!,
+    ...(patientId ? { patientId } : {}),
+    ...(status ? { status } : {}),
+  };
+
+  const [total, data] = await Promise.all([
+    prisma.consultation.count({ where }),
+    prisma.consultation.findMany({
+      where,
+      skip,
+      take: parseInt(limit),
+      orderBy: { startedAt: "desc" },
+      include: {
+        patient: { select: { id: true, phone: true } },
+        prescriptions: { select: { id: true } },
+        labOrders: { select: { id: true } },
+        invoices: { select: { id: true, status: true, total: true } },
+      },
+    }),
+  ]);
+
+  res.json({ data, meta: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) } });
 });
 
 // ─── GET /api/consultations/:id ───────────────────────────────────────────────
@@ -115,7 +146,7 @@ consultationsRouter.patch("/:id", requireScope("consultations:write"), async (re
     return;
   }
 
-  if (consultation.doctorId !== req.user!.sub) {
+  if (consultation.doctorId !== req.user!.doctor_id!) {
     res.status(403).json({ error: "Not your consultation" });
     return;
   }
@@ -146,7 +177,7 @@ consultationsRouter.post("/:id/end", requireScope("consultations:write"), async 
     return;
   }
 
-  if (consultation.doctorId !== req.user!.sub) {
+  if (consultation.doctorId !== req.user!.doctor_id!) {
     res.status(403).json({ error: "Not your consultation" });
     return;
   }
@@ -180,4 +211,42 @@ consultationsRouter.post("/:id/end", requireScope("consultations:write"), async 
   ]);
 
   res.json(updated);
+});
+
+// ─── POST /api/consultations/:id/telemedicine/room ───────────────────────────
+
+consultationsRouter.post("/:id/telemedicine/room", requireScope("consultations:write"), async (req, res) => {
+  const consultation = await prisma.consultation.findUnique({ where: { id: req.params["id"] } });
+  if (!consultation || consultation.doctorId !== req.user!.doctor_id!) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (!process.env["DAILY_API_KEY"]) {
+    res.status(503).json({ error: "Telemedicine not configured" });
+    return;
+  }
+
+  const r = await fetch("https://api.daily.co/v1/rooms", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env["DAILY_API_KEY"]}`,
+    },
+    body: JSON.stringify({
+      name: `cliniqai-${consultation.id.slice(0, 8)}`,
+      properties: {
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        enable_screenshare: false,
+      },
+    }),
+  });
+
+  if (!r.ok) {
+    res.status(502).json({ error: "Failed to create video room" });
+    return;
+  }
+
+  const room = await r.json() as { url: string; name: string };
+  res.json({ roomUrl: room.url, roomName: room.name });
 });

@@ -52,7 +52,7 @@ labsRouter.post("/orders", requireScope("labs:write"), async (req, res) => {
     return;
   }
 
-  if (consultation.doctorId !== req.user!.sub) {
+  if (consultation.doctorId !== req.user!.doctor_id!) {
     res.status(403).json({ error: "Not your consultation" });
     return;
   }
@@ -77,6 +77,23 @@ labsRouter.post("/orders", requireScope("labs:write"), async (req, res) => {
   });
 
   res.status(201).json(order);
+});
+
+// ─── GET /api/labs/orders ─────────────────────────────────────────────────────
+
+labsRouter.get("/orders", requireScope("labs:read"), async (req, res) => {
+  const { consultationId, patientId } = req.query as Record<string, string>;
+
+  const orders = await prisma.labOrder.findMany({
+    where: {
+      ...(consultationId ? { consultationId } : {}),
+      ...(patientId ? { patientId } : {}),
+    },
+    include: { results: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  res.json({ data: orders });
 });
 
 // ─── GET /api/labs/orders/:id ─────────────────────────────────────────────────

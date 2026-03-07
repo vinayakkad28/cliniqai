@@ -51,7 +51,7 @@ prescriptionsRouter.post("/", requireScope("prescriptions:write"), async (req, r
     return;
   }
 
-  if (consultation.doctorId !== req.user!.sub) {
+  if (consultation.doctorId !== req.user!.doctor_id!) {
     res.status(403).json({ error: "Not your consultation" });
     return;
   }
@@ -85,7 +85,7 @@ prescriptionsRouter.post("/", requireScope("prescriptions:write"), async (req, r
     data: {
       consultationId,
       patientId: consultation.patientId,
-      doctorId: req.user!.sub,
+      doctorId: req.user!.doctor_id!,
       fhirMedicationRequestId: fhirMedReq?.id ?? null,
       sentVia: sendVia !== "none" ? sendVia : null,
       sentAt: sendVia !== "none" ? now : null,
@@ -95,7 +95,7 @@ prescriptionsRouter.post("/", requireScope("prescriptions:write"), async (req, r
 
   // Enqueue delivery job
   if (sendVia === "whatsapp") {
-    await whatsappPrescriptionQueue.add({
+    whatsappPrescriptionQueue.add({
       prescriptionId: prescription.id,
       patientPhone: consultation.patient.phone,
       doctorName: consultation.doctor.name,
@@ -105,14 +105,14 @@ prescriptionsRouter.post("/", requireScope("prescriptions:write"), async (req, r
         frequency: m.frequency,
         duration: m.duration,
       })),
-    });
+    }).catch(() => {}); // fire-and-forget
   } else if (sendVia === "sms") {
-    await smsReminderQueue.add({
+    smsReminderQueue.add({
       prescriptionId: prescription.id,
       patientPhone: consultation.patient.phone,
       type: "prescription",
       doctorName: consultation.doctor.name,
-    });
+    }).catch(() => {}); // fire-and-forget
   }
 
   res.status(201).json({
@@ -168,19 +168,19 @@ prescriptionsRouter.post("/:id/send", requireScope("prescriptions:write"), async
   });
 
   if (bodyResult.data.via === "whatsapp") {
-    await whatsappPrescriptionQueue.add({
+    whatsappPrescriptionQueue.add({
       prescriptionId: prescription.id,
       patientPhone: prescription.patient.phone,
       doctorName: prescription.doctor.name,
       medications: [],
-    });
+    }).catch(() => {}); // fire-and-forget
   } else {
-    await smsReminderQueue.add({
+    smsReminderQueue.add({
       prescriptionId: prescription.id,
       patientPhone: prescription.patient.phone,
       type: "prescription",
       doctorName: prescription.doctor.name,
-    });
+    }).catch(() => {}); // fire-and-forget
   }
 
   res.json({ message: `Prescription queued for delivery via ${bodyResult.data.via}` });

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authenticate, requireScope } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { fhirClient } from "../lib/fhirClient.js";
+import { aiClient } from "../lib/aiClient.js";
 
 export const patientsRouter = Router();
 
@@ -19,7 +20,17 @@ const CreatePatientSchema = z.object({
   tags: z.array(z.string().max(50)).optional(),
 });
 
-const UpdatePatientSchema = CreatePatientSchema.partial().omit({ phone: true });
+const MedicalHistorySchema = z.object({
+  allergies: z.array(z.string()).optional(),
+  chronicConditions: z.array(z.string()).optional(),
+  pastSurgeries: z.array(z.string()).optional(),
+  currentMedications: z.array(z.string()).optional(),
+  familyHistory: z.string().max(1000).optional(),
+});
+
+const UpdatePatientSchema = CreatePatientSchema.partial().omit({ phone: true }).extend({
+  medicalHistory: MedicalHistorySchema.optional(),
+});
 
 const ListQuerySchema = z.object({
   search: z.string().optional(),
@@ -41,7 +52,7 @@ patientsRouter.get("/", requireScope("patients:read"), async (req, res) => {
   const skip = (page - 1) * limit;
 
   const where = {
-    createdByDoctorId: req.user!.sub,
+    createdByDoctorId: req.user!.doctor_id ?? req.user!.sub,
     ...(tag ? { tags: { some: { tag } } } : {}),
   };
 
@@ -93,7 +104,7 @@ patientsRouter.post("/", requireScope("patients:write"), async (req, res) => {
     data: {
       phone,
       fhirPatientId,
-      createdByDoctorId: req.user!.sub,
+      createdByDoctorId: req.user!.doctor_id ?? req.user!.sub,
       tags: tags ? { create: tags.map((tag) => ({ tag })) } : undefined,
     },
     include: { tags: true },
@@ -136,7 +147,15 @@ patientsRouter.patch("/:id", requireScope("patients:write"), async (req, res) =>
     return;
   }
 
-  const { tags, ...fhirFields } = result.data;
+  const { tags, medicalHistory, ...fhirFields } = result.data;
+
+  // Save medicalHistory if provided
+  if (medicalHistory !== undefined) {
+    await prisma.patient.update({
+      where: { id: patient.id },
+      data: { medicalHistory },
+    });
+  }
 
   // Update FHIR Patient (best-effort)
   if (Object.keys(fhirFields).length > 0) {
@@ -190,4 +209,27 @@ patientsRouter.get("/:id/timeline", requireScope("patients:read"), async (req, r
   ]);
 
   res.json({ consultations, labOrders });
+});
+
+// ─── POST /api/patients/:id/search — AI natural language record search ────────
+
+patientsRouter.post("/:id/search", requireScope("patients:read"), async (req, res) => {
+  const result = z.object({ query: z.string().min(3).max(500) }).safeParse(req.body);
+  if (!result.success) {
+    res.status(400).json({ error: result.error.flatten() });
+    return;
+  }
+
+  const patient = await prisma.patient.findUnique({ where: { id: req.params["id"] } });
+  if (!patient) {
+    res.status(404).json({ error: "Patient not found" });
+    return;
+  }
+
+  const answer = await aiClient.vectorSearch({
+    query: result.data.query,
+    patientId: patient.fhirPatientId,
+  }).catch(() => null);
+
+  res.json({ answer: answer ?? [], patientId: patient.id, query: result.data.query });
 });

@@ -25,13 +25,16 @@ enum UserRole {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String?  @unique
-  phone        String   @unique
-  passwordHash String?  @map("password_hash")
-  role         UserRole @default(doctor)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(uuid())
+  email              String?  @unique
+  phone              String   @unique
+  passwordHash       String?  @map("password_hash")
+  role               UserRole @default(doctor)
+  invitedByDoctorId  String?  @map("invited_by_doctor_id")
+  name               String?
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
   doctor        Doctor?
@@ -159,6 +162,7 @@ model Patient {
   phone             String   @unique
   createdByDoctorId String?  @map("created_by_doctor_id")
   createdAt         DateTime @default(now()) @map("created_at")
+  medicalHistory    Json?    @map("medical_history") @db.JsonB
 
   user          User?              @relation(fields: [userId], references: [id])
   tags          PatientTag[]

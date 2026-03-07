@@ -132,6 +132,25 @@ pharmacyRouter.patch("/inventory/:id", requireScope("pharmacy:write"), async (re
   res.json(updated);
 });
 
+// ─── GET /api/pharmacy/queue ──────────────────────────────────────────────────
+
+pharmacyRouter.get("/queue", requireScope("pharmacy:read"), async (req, res) => {
+  const rxList = await prisma.prescription.findMany({
+    where: {
+      doctorId: req.user!.doctor_id!,
+      sentVia: { not: null },
+    },
+    orderBy: { sentAt: "desc" },
+    take: 50,
+    include: {
+      patient: { select: { id: true, phone: true } },
+      consultation: { select: { id: true, chiefComplaint: true } },
+      dispensing: { include: { medicine: true } },
+    },
+  });
+  res.json({ data: rxList });
+});
+
 // ─── POST /api/pharmacy/dispense ─────────────────────────────────────────────
 
 pharmacyRouter.post("/dispense", requireScope("pharmacy:write"), async (req, res) => {

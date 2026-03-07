@@ -8,7 +8,10 @@ const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "🏠" },
   { href: "/dashboard/appointments", label: "Appointments", icon: "📅" },
   { href: "/dashboard/patients", label: "Patients", icon: "👥" },
+  { href: "/dashboard/consultations", label: "Consultations", icon: "🩺" },
   { href: "/dashboard/billing", label: "Billing", icon: "💳" },
+  { href: "/dashboard/pharmacy", label: "Pharmacy", icon: "💊" },
+  { href: "/dashboard/settings", label: "Settings", icon: "⚙️" },
 ];
 
 export default function Sidebar() {

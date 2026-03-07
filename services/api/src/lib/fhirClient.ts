@@ -12,14 +12,23 @@ async function fhirRequest(
   path: string,
   body?: unknown,
 ): Promise<unknown> {
-  const res = await fetch(`${FHIR_SERVICE_URL}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Internal-Token": INTERNAL_TOKEN,
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+
+  let res: Response;
+  try {
+    res = await fetch(`${FHIR_SERVICE_URL}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Token": INTERNAL_TOKEN,
+      },
+      signal: controller.signal,
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const text = await res.text();

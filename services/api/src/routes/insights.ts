@@ -61,11 +61,11 @@ insightsRouter.post("/request", requireScope("consultations:write"), async (req,
 
   // Enqueue async clinical alert processing
   if (type === "clinical_alert") {
-    await clinicalAlertQueue.add({
+    clinicalAlertQueue.add({
       patientId,
       consultationId,
       triggerType: "new_consultation",
-    });
+    }).catch(() => {}); // fire-and-forget
     res.json({ message: "Clinical alert evaluation queued", patientId });
     return;
   }

@@ -4,6 +4,7 @@
  */
 
 const BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001/api";
+export const AI_BASE = process.env["NEXT_PUBLIC_AI_URL"] ?? "http://localhost:8001";
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -89,7 +90,32 @@ export const doctors = {
     request("PUT", "/doctors/me/working-hours", hours),
 };
 
+// ─── Staff ────────────────────────────────────────────────────────────────────
+
+export interface StaffMember {
+  id: string;
+  phone: string;
+  name: string | null;
+  role: string;
+  createdAt: string;
+}
+
+export const staff = {
+  list: () => request<{ data: StaffMember[] }>("GET", "/doctors/staff"),
+  create: (data: { phone: string; name: string; role: string }) =>
+    request<StaffMember & { setupCode: string }>("POST", "/doctors/staff", data),
+  remove: (userId: string) => request<{ message: string }>("DELETE", `/doctors/staff/${userId}`),
+};
+
 // ─── Patients ─────────────────────────────────────────────────────────────────
+
+export interface MedicalHistory {
+  allergies?: string[];
+  chronicConditions?: string[];
+  pastSurgeries?: string[];
+  currentMedications?: string[];
+  familyHistory?: string;
+}
 
 export interface Patient {
   id: string;
@@ -97,6 +123,7 @@ export interface Patient {
   fhirPatientId: string;
   tags: { tag: string }[];
   createdAt: string;
+  medicalHistory?: MedicalHistory | null;
 }
 
 export interface PatientListResponse {
@@ -114,7 +141,13 @@ export const patients = {
   get: (id: string) => request<Patient & { fhir?: Record<string, unknown> }>("GET", `/patients/${id}`),
   create: (data: { phone: string; name: string; dateOfBirth?: string; gender?: string; address?: string }) =>
     request<Patient>("POST", "/patients", data),
+  patch: (id: string, data: { medicalHistory?: MedicalHistory }) =>
+    request<Patient>("PATCH", `/patients/${id}`, data),
   timeline: (id: string) => request<unknown[]>("GET", `/patients/${id}/timeline`),
+  search: (id: string, query: string) =>
+    request<{ answer: Array<{ documentId: string; chunkText: string; score: number }>; query: string }>(
+      "POST", `/patients/${id}/search`, { query }
+    ),
 };
 
 // ─── Appointments ─────────────────────────────────────────────────────────────
@@ -135,7 +168,7 @@ export interface AppointmentListResponse {
 }
 
 export const appointments = {
-  list: (params?: { date?: string; status?: string; page?: number }) => {
+  list: (params?: { date?: string; from?: string; to?: string; status?: string; page?: number; limit?: number }) => {
     const qs = new URLSearchParams(
       Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
     ).toString();
@@ -150,6 +183,12 @@ export const appointments = {
 // ─── Consultations ────────────────────────────────────────────────────────────
 
 export const consultations = {
+  list: (params?: { patientId?: string; status?: string; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString();
+    return request("GET", `/consultations${qs ? `?${qs}` : ""}`);
+  },
   start: (appointmentId: string, chiefComplaint?: string) =>
     request("POST", "/consultations", { appointmentId, chiefComplaint }),
   get: (id: string) => request("GET", `/consultations/${id}`),
@@ -177,6 +216,29 @@ export const billing = {
     ).toString();
     return request("GET", `/billing/reports/revenue${qs ? `?${qs}` : ""}`);
   },
+  dailyRevenue: (days = 30) => request<{ days: Record<string, number> }>("GET", `/billing/reports/daily?days=${days}`),
+  exportCsvUrl: (params?: { from?: string; to?: string; status?: string }) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString();
+    return `/billing/invoices/export${qs ? `?${qs}` : ""}`;
+  },
+};
+
+// ─── Clinic ───────────────────────────────────────────────────────────────────
+
+export interface ClinicProfile {
+  id: string;
+  name: string;
+  address: string;
+  gstNumber: string | null;
+  logoUrl: string | null;
+}
+
+export const clinic = {
+  get: () => request<ClinicProfile | null>("GET", "/clinic/me"),
+  patch: (data: { name?: string; address?: string; gstNumber?: string; logoUrl?: string }) =>
+    request<ClinicProfile>("PATCH", "/clinic/me", data),
 };
 
 // ─── Documents (Phase 2) ──────────────────────────────────────────────────────
@@ -210,6 +272,75 @@ export const documents = {
       method: "DELETE",
       headers: { Authorization: `Bearer ${getToken()}` },
     }).then((r) => { if (!r.ok) throw new Error("Delete failed"); }),
+};
+
+// ─── Labs ─────────────────────────────────────────────────────────────────────
+
+export const labs = {
+  createOrder: (data: { consultationId: string; tests: string[] }) =>
+    request<{ id: string }>("POST", "/labs/orders", data),
+
+  listOrders: (params: { consultationId?: string; patientId?: string }) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString();
+    return request("GET", `/labs/orders${qs ? `?${qs}` : ""}`);
+  },
+  getOrder: (id: string) => request("GET", `/labs/orders/${id}`),
+};
+
+// ─── Pharmacy ─────────────────────────────────────────────────────────────────
+
+export const pharmacy = {
+  listMedicines: (params?: { search?: string; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString();
+    return request("GET", `/pharmacy/medicines${qs ? `?${qs}` : ""}`);
+  },
+  createMedicine: (data: { name: string; genericName?: string; manufacturer?: string; form?: string; strength?: string; unit?: string }) =>
+    request("POST", "/pharmacy/medicines", data),
+  getInventory: () => request("GET", "/pharmacy/inventory"),
+  getLowStock: () => request("GET", "/pharmacy/inventory/low-stock"),
+  updateInventory: (id: string, data: { stockQuantity?: number; reorderLevel?: number; expiryDate?: string; batchNumber?: string; costPrice?: number; sellingPrice?: number }) =>
+    request("PATCH", `/pharmacy/inventory/${id}`, data),
+};
+
+// ─── Prescriptions ─────────────────────────────────────────────────────────────
+
+export const prescriptions = {
+  list: (consultationId: string) =>
+    request("GET", `/prescriptions?consultationId=${consultationId}`),
+  get: (id: string) => request("GET", `/prescriptions/${id}`),
+};
+
+// ─── Pharmacy Queue (Phase 2) ─────────────────────────────────────────────────
+
+export interface RxQueueItem {
+  id: string;
+  sentAt: string | null;
+  sentVia: string | null;
+  status: string;
+  patient: { id: string; phone: string };
+  consultation: { id: string; chiefComplaint: string | null } | null;
+  dispensing: Array<{
+    id: string;
+    quantityDispensed: number;
+    medicine: { id: string; name: string };
+  }>;
+}
+
+export const pharmacyQueue = {
+  list: () => request<{ data: RxQueueItem[] }>("GET", "/pharmacy/queue"),
+};
+
+// ─── Telemedicine (Phase 2) ───────────────────────────────────────────────────
+
+export const telemedicine = {
+  createRoom: (consultationId: string) =>
+    request<{ roomUrl: string; roomName: string }>(
+      "POST", `/consultations/${consultationId}/telemedicine/room`
+    ),
 };
 
 // ─── AI Insights (Phase 3) ────────────────────────────────────────────────────

@@ -29,6 +29,9 @@ logs/
 .DS_Store
 Thumbs.db
 
+# Claude Code session data
+.claude/
+
 # Editor
 .vscode/settings.json
 .idea/

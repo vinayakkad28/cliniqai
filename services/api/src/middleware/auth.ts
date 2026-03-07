@@ -5,6 +5,7 @@ export interface AuthPayload {
   sub: string;
   role: string;
   clinic_id?: string;
+  doctor_id?: string;
   scope: string[];
   iat: number;
   exp: number;

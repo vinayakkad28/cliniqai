@@ -64,7 +64,7 @@ documentsRouter.post("/upload-url", requireScope("patients:write"), async (req, 
     prisma.document.create({
       data: {
         patientId,
-        uploadedByDoctorId: req.user!.sub,
+        uploadedByDoctorId: req.user!.doctor_id ?? req.user!.sub,
         gcsPath,
         fileName,
         mimeType,
@@ -91,10 +91,10 @@ documentsRouter.post("/:id/confirm", requireScope("patients:write"), async (req,
     data: { status: "processing" },
   });
 
-  await documentProcessQueue.add(
+  documentProcessQueue.add(
     { documentId: document.id },
     { attempts: 3, backoff: { type: "exponential", delay: 5000 } },
-  );
+  ).catch(() => {}); // fire-and-forget
 
   res.json({ message: "Processing started", documentId: document.id });
 });

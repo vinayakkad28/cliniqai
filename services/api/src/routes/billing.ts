@@ -87,7 +87,7 @@ billingRouter.get("/invoices", requireScope("billing:read"), async (req, res) =>
   const skip = (page - 1) * limit;
 
   const where = {
-    doctorId: req.user!.sub,
+    doctorId: req.user!.doctor_id!,
     ...(status ? { status } : {}),
     ...(patientId ? { patientId } : {}),
     ...(from || to
@@ -176,15 +176,58 @@ billingRouter.patch("/invoices/:id", requireScope("billing:write"), async (req, 
 
   // Send email receipt if fully paid
   if (paidAmount >= Number(invoice.total)) {
-    await emailReceiptQueue.add({
+    emailReceiptQueue.add({
       invoiceId: invoice.id,
       patientPhone: invoice.patient.phone,
       total: paidAmount,
       paidAt: now.toISOString(),
-    });
+    }).catch(() => {}); // fire-and-forget
   }
 
   res.json(updatedInvoice);
+});
+
+// ─── GET /api/billing/invoices/export — CSV download ─────────────────────────
+
+billingRouter.get("/invoices/export", requireScope("billing:read"), async (req, res) => {
+  const { from, to, status } = z.object({
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    status: z.enum(["pending", "paid", "partially_paid", "cancelled", "refunded"]).optional(),
+  }).parse(req.query);
+
+  const where = {
+    doctorId: req.user!.doctor_id!,
+    ...(status ? { status } : {}),
+    ...(from || to ? { createdAt: {
+      ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+      ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+    } } : {}),
+  };
+
+  const invoices = await prisma.invoice.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    include: { patient: { select: { phone: true } } },
+  });
+
+  const lines = ["Date,Patient,Fees,GST,Total,Status,Payment Method,Paid At"];
+  for (const inv of invoices) {
+    lines.push([
+      inv.createdAt.toISOString().slice(0, 10),
+      inv.patient.phone,
+      Number(inv.amount).toFixed(2),
+      Number(inv.gstAmount).toFixed(2),
+      Number(inv.total).toFixed(2),
+      inv.status,
+      inv.paymentMethod ?? "",
+      inv.paidAt ? inv.paidAt.toISOString().slice(0, 10) : "",
+    ].join(","));
+  }
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="invoices-${Date.now()}.csv"`);
+  res.send(lines.join("\n"));
 });
 
 // ─── GET /api/billing/reports/revenue ────────────────────────────────────────
@@ -198,7 +241,7 @@ billingRouter.get("/reports/revenue", requireScope("billing:read"), async (req, 
     .parse(req.query);
 
   const where = {
-    doctorId: req.user!.sub,
+    doctorId: req.user!.doctor_id!,
     status: { in: ["paid", "partially_paid"] as ("paid" | "partially_paid")[] },
     ...(from || to
       ? {
@@ -223,4 +266,39 @@ billingRouter.get("/reports/revenue", requireScope("billing:read"), async (req, 
     invoiceCount: (result._count as { id?: number })?.id ?? 0,
     period: { from: from ?? null, to: to ?? null },
   });
+});
+
+// ─── GET /api/billing/reports/daily — Day-by-day revenue for sparkline ────────
+
+billingRouter.get("/reports/daily", requireScope("billing:read"), async (req, res) => {
+  const { days } = z.object({ days: z.coerce.number().int().min(1).max(90).default(30) }).parse(req.query);
+
+  const from = new Date();
+  from.setDate(from.getDate() - days + 1);
+  from.setHours(0, 0, 0, 0);
+
+  const invoices = await prisma.invoice.findMany({
+    where: {
+      doctorId: req.user!.doctor_id!,
+      status: { in: ["paid", "partially_paid"] },
+      paidAt: { gte: from },
+    },
+    select: { paidAt: true, total: true },
+    orderBy: { paidAt: "asc" },
+  });
+
+  const byDate: Record<string, number> = {};
+  // Pre-fill all days with 0
+  for (let i = 0; i < days; i++) {
+    const d = new Date(from);
+    d.setDate(d.getDate() + i);
+    byDate[d.toISOString().slice(0, 10)] = 0;
+  }
+  for (const inv of invoices) {
+    if (!inv.paidAt) continue;
+    const d = inv.paidAt.toISOString().slice(0, 10);
+    byDate[d] = (byDate[d] ?? 0) + Number(inv.total);
+  }
+
+  res.json({ days: byDate });
 });
