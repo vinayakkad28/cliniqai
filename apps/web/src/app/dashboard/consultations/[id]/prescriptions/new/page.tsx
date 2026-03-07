@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 const BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001/api";
 const AI_BASE = process.env["NEXT_PUBLIC_AI_URL"] ?? "http://localhost:8001";
+const AI_TOKEN = process.env["NEXT_PUBLIC_AI_INTERNAL_TOKEN"] ?? "";
 
 interface Medication {
   drug: string;
@@ -132,10 +133,9 @@ export default function NewPrescriptionPage({ params }: { params: { id: string }
     if (!transcript.trim()) return;
     setAiProcessing(true);
     try {
-      const token = localStorage.getItem("cliniqai_access_token") ?? "";
       const res = await fetch(`${AI_BASE}/voice/structure`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Internal-Token": token },
+        headers: { "Content-Type": "application/json", "X-Internal-Token": AI_TOKEN },
         body: JSON.stringify({ transcript }),
       });
       if (res.ok) {
@@ -190,12 +190,11 @@ export default function NewPrescriptionPage({ params }: { params: { id: string }
     if (!audioBlob) return;
     setUploadTranscribing(true);
     try {
-      const token = localStorage.getItem("cliniqai_access_token") ?? "";
       const form = new FormData();
       form.append("audio", audioBlob, "recording.webm");
       const res = await fetch(`${AI_BASE}/voice/transcribe`, {
         method: "POST",
-        headers: { "X-Internal-Token": token },
+        headers: { "X-Internal-Token": AI_TOKEN },
         body: form,
       });
       if (res.ok) {

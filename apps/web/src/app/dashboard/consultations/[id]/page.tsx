@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { consultations, telemedicine } from "@/lib/api";
 
 const AI_BASE = process.env["NEXT_PUBLIC_AI_URL"] ?? "http://localhost:8001";
+const AI_TOKEN = process.env["NEXT_PUBLIC_AI_INTERNAL_TOKEN"] ?? "";
 
 interface ConsultationDetail {
   id: string;
@@ -118,10 +119,9 @@ export default function ConsultationPage({ params }: { params: { id: string } })
     setDiagnosisLoading(true);
     setDiagnosisSuggestions([]);
     try {
-      const token = localStorage.getItem("cliniqai_access_token") ?? "";
       const res = await fetch(`${AI_BASE}/diagnosis/suggest`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Internal-Token": token },
+        headers: { "Content-Type": "application/json", "X-Internal-Token": AI_TOKEN },
         body: JSON.stringify({
           symptoms: diagnosisInput.split(/[,\n]/).map((s) => s.trim()).filter(Boolean),
           patient_id: consultation?.patientId,
@@ -141,10 +141,9 @@ export default function ConsultationPage({ params }: { params: { id: string } })
     setNotesAiLoading(true);
     setStructuredNotes(null);
     try {
-      const token = localStorage.getItem("cliniqai_access_token") ?? "";
       const res = await fetch(`${AI_BASE}/notes/summarize`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Internal-Token": token },
+        headers: { "Content-Type": "application/json", "X-Internal-Token": AI_TOKEN },
         body: JSON.stringify({ raw_notes: notesAiInput }),
       });
       if (res.ok) {

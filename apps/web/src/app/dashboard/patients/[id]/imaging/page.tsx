@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import Link from "next/link";
 
 const AI_BASE = process.env["NEXT_PUBLIC_AI_URL"] ?? "http://localhost:8001";
+const AI_TOKEN = process.env["NEXT_PUBLIC_AI_INTERNAL_TOKEN"] ?? "";
 
 interface ImagingResult {
   findings: string[];
@@ -57,7 +58,6 @@ export default function ImagingPage({ params }: { params: { id: string } }) {
     setError("");
     setResult(null);
     try {
-      const token = localStorage.getItem("cliniqai_access_token") ?? "";
       const selected = IMAGE_TYPES.find((t) => t.value === imageType)!;
       const form = new FormData();
       form.append("image", imageFile);
@@ -66,7 +66,7 @@ export default function ImagingPage({ params }: { params: { id: string } }) {
       }
       const res = await fetch(`${AI_BASE}${selected.endpoint}`, {
         method: "POST",
-        headers: { "X-Internal-Token": token },
+        headers: { "X-Internal-Token": AI_TOKEN },
         body: form,
       });
       if (!res.ok) {
