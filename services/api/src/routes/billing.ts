@@ -114,6 +114,49 @@ billingRouter.get("/invoices", requireScope("billing:read"), async (req, res) =>
   res.json({ data: invoices, meta: { total, page, limit, pages: Math.ceil(total / limit) } });
 });
 
+// ─── GET /api/billing/invoices/export — CSV download ─────────────────────────
+
+billingRouter.get("/invoices/export", requireScope("billing:read"), async (req, res) => {
+  const { from, to, status } = z.object({
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    status: z.enum(["pending", "paid", "partially_paid", "cancelled", "refunded"]).optional(),
+  }).parse(req.query);
+
+  const where = {
+    doctorId: req.user!.doctor_id!,
+    ...(status ? { status } : {}),
+    ...(from || to ? { createdAt: {
+      ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+      ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+    } } : {}),
+  };
+
+  const invoices = await prisma.invoice.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    include: { patient: { select: { phone: true } } },
+  });
+
+  const lines = ["Date,Patient,Fees,GST,Total,Status,Payment Method,Paid At"];
+  for (const inv of invoices) {
+    lines.push([
+      inv.createdAt.toISOString().slice(0, 10),
+      inv.patient.phone,
+      Number(inv.amount).toFixed(2),
+      Number(inv.gstAmount).toFixed(2),
+      Number(inv.total).toFixed(2),
+      inv.status,
+      inv.paymentMethod ?? "",
+      inv.paidAt ? inv.paidAt.toISOString().slice(0, 10) : "",
+    ].join(","));
+  }
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="invoices-${Date.now()}.csv"`);
+  res.send(lines.join("\n"));
+});
+
 // ─── GET /api/billing/invoices/:id ───────────────────────────────────────────
 
 billingRouter.get("/invoices/:id", requireScope("billing:read"), async (req, res) => {
@@ -185,49 +228,6 @@ billingRouter.patch("/invoices/:id", requireScope("billing:write"), async (req, 
   }
 
   res.json(updatedInvoice);
-});
-
-// ─── GET /api/billing/invoices/export — CSV download ─────────────────────────
-
-billingRouter.get("/invoices/export", requireScope("billing:read"), async (req, res) => {
-  const { from, to, status } = z.object({
-    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    status: z.enum(["pending", "paid", "partially_paid", "cancelled", "refunded"]).optional(),
-  }).parse(req.query);
-
-  const where = {
-    doctorId: req.user!.doctor_id!,
-    ...(status ? { status } : {}),
-    ...(from || to ? { createdAt: {
-      ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
-      ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
-    } } : {}),
-  };
-
-  const invoices = await prisma.invoice.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    include: { patient: { select: { phone: true } } },
-  });
-
-  const lines = ["Date,Patient,Fees,GST,Total,Status,Payment Method,Paid At"];
-  for (const inv of invoices) {
-    lines.push([
-      inv.createdAt.toISOString().slice(0, 10),
-      inv.patient.phone,
-      Number(inv.amount).toFixed(2),
-      Number(inv.gstAmount).toFixed(2),
-      Number(inv.total).toFixed(2),
-      inv.status,
-      inv.paymentMethod ?? "",
-      inv.paidAt ? inv.paidAt.toISOString().slice(0, 10) : "",
-    ].join(","));
-  }
-
-  res.setHeader("Content-Type", "text/csv");
-  res.setHeader("Content-Disposition", `attachment; filename="invoices-${Date.now()}.csv"`);
-  res.send(lines.join("\n"));
 });
 
 // ─── GET /api/billing/reports/revenue ────────────────────────────────────────

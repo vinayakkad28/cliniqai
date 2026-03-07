@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routers import (
     voice, prescription, ddi, diagnosis, notes, imaging, lab, records, discharge,
@@ -11,6 +12,13 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs" if settings.environment != "production" else None,
     redoc_url="/redoc" if settings.environment != "production" else None,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Health check (unauthenticated — used by Cloud Run health probes)
