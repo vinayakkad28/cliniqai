@@ -377,3 +377,6 @@ export const insights = {
   longitudinal: (patientId: string) =>
     request<{ insight: AiInsight; cached: boolean }>("GET", `/insights/longitudinal/${patientId}`),
 };
+
+// Unified API namespace for pages that import { api }
+export const api = { auth, doctors, staff, patients, appointments, consultations, billing, clinic, documents, labs, pharmacy, prescriptions, pharmacyQueue, telemedicine, insights };

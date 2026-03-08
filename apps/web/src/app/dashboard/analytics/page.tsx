@@ -20,7 +20,7 @@ interface AnalyticsData {
 }
 
 export default function AnalyticsPage() {
-  const { token } = useAuth();
+  useAuth();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
   const [loading, setLoading] = useState(true);
@@ -32,17 +32,19 @@ export default function AnalyticsPage() {
   async function loadAnalytics() {
     setLoading(true);
     try {
+      const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
       const [revenueRes, patientsRes] = await Promise.all([
-        api.billing.getRevenueReport(token!, period),
-        api.patients.list(token!, { page: 1, limit: 1 }),
+        api.billing.dailyRevenue(days),
+        api.patients.list({ page: 1, limit: 1 }),
       ]);
 
+      const totalRevenue = Object.values(revenueRes.days ?? {}).reduce((a: number, b: number) => a + b, 0);
       setData({
-        totalPatients: patientsRes.total || 0,
-        totalConsultations: revenueRes.totalInvoices || 0,
-        totalRevenue: revenueRes.totalRevenue || 0,
-        avgPatientsPerDay: Math.round((patientsRes.total || 0) / (period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365)),
-        topDiagnoses: revenueRes.topDiagnoses || [
+        totalPatients: patientsRes.meta?.total || 0,
+        totalConsultations: Object.keys(revenueRes.days ?? {}).length,
+        totalRevenue,
+        avgPatientsPerDay: Math.round((patientsRes.meta?.total || 0) / days),
+        topDiagnoses: [
           { name: 'Upper Respiratory Infection', count: 45 },
           { name: 'Type 2 Diabetes', count: 38 },
           { name: 'Hypertension', count: 35 },
@@ -52,7 +54,7 @@ export default function AnalyticsPage() {
           { name: 'Allergic Rhinitis', count: 15 },
           { name: 'Urinary Tract Infection', count: 12 },
         ],
-        dailyRevenue: revenueRes.dailyRevenue || [],
+        dailyRevenue: Object.entries(revenueRes.days ?? {}).map(([date, amount]) => ({ date, amount: amount as number })),
         appointmentsByType: [
           { type: 'Walk-in', count: 120 },
           { type: 'Scheduled', count: 85 },

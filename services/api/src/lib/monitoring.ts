@@ -156,7 +156,7 @@ export async function healthCheck(): Promise<HealthCheck> {
 
 async function checkDatabase(): Promise<'up' | 'down'> {
   try {
-    const prisma = (await import('./prisma')).default;
+    const { prisma } = await import('./prisma.js');
     await prisma.$queryRaw`SELECT 1`;
     return 'up';
   } catch {

@@ -59,35 +59,27 @@ export default function OnboardingPage() {
     setSaving(true);
     try {
       if (currentStep === 'profile') {
-        await api.doctors.updateProfile(token!, {
-          first_name: profile.firstName,
-          last_name: profile.lastName,
-          qualification: profile.qualification,
-          specialization: profile.specialization,
-          registration_number: profile.registrationNumber,
-          years_of_experience: parseInt(profile.experience) || 0,
+        await api.doctors.patchMe({
+          name: `${profile.firstName} ${profile.lastName}`.trim(),
+          specialties: profile.specialization ? [profile.specialization] : undefined,
+          licenseNumber: profile.registrationNumber,
         });
         setCurrentStep('clinic');
       } else if (currentStep === 'clinic') {
-        await api.clinic.upsert(token!, {
+        await api.clinic.patch({
           name: clinic.name,
           address: `${clinic.address}, ${clinic.city}, ${clinic.state} - ${clinic.pincode}`,
-          phone: clinic.phone,
-          email: clinic.email,
-          gstin: clinic.gstin || undefined,
+          gstNumber: clinic.gstin || undefined,
         });
         setCurrentStep('hours');
       } else if (currentStep === 'hours') {
         const workingHours = hours
           .filter((h) => h.enabled)
-          .map((h) => ({
-            day: h.day.toLowerCase(),
-            slots: [
-              { start: h.morning.start, end: h.morning.end },
-              { start: h.evening.start, end: h.evening.end },
-            ],
-          }));
-        await api.doctors.updateWorkingHours(token!, workingHours);
+          .flatMap((h) => [
+            { dayOfWeek: h.day.toLowerCase(), startTime: h.morning.start, endTime: h.morning.end, slotDurationMins: 15 },
+            { dayOfWeek: h.day.toLowerCase(), startTime: h.evening.start, endTime: h.evening.end, slotDurationMins: 15 },
+          ]);
+        await api.doctors.putWorkingHours(workingHours);
         setCurrentStep('import');
       } else if (currentStep === 'import') {
         setCurrentStep('done');

@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { authenticate } from '../middleware/auth';
-import prisma from '../lib/prisma';
-import { abdmClient } from '../lib/abdmClient';
+import { prisma } from '../lib/prisma';
+import { abdmClient } from '../lib/abdmClientFull';
 
 const router = Router();
 
@@ -39,10 +39,10 @@ router.post('/abha/verify-otp', authenticate, async (req: Request, res: Response
       await prisma.patient.update({
         where: { id: patientId },
         data: {
-          abha_number: verifyResponse.healthIdNumber,
-          abha_address: verifyResponse.healthId,
-          abdm_linked: true,
-          abdm_linked_at: new Date(),
+          abhaNumber: verifyResponse.healthIdNumber,
+          abhaAddress: verifyResponse.healthId,
+          abdmLinked: true,
+          abdmLinkedAt: new Date(),
         },
       });
 
@@ -77,10 +77,10 @@ router.post('/abha/link', authenticate, async (req: Request, res: Response) => {
     await prisma.patient.update({
       where: { id: patientId },
       data: {
-        abha_number: abhaNumber,
-        abha_address: verified.abhaAddress,
-        abdm_linked: true,
-        abdm_linked_at: new Date(),
+        abhaNumber: abhaNumber,
+        abhaAddress: verified.abhaAddress,
+        abdmLinked: true,
+        abdmLinkedAt: new Date(),
       },
     });
 
@@ -120,9 +120,9 @@ router.post('/hip/register', authenticate, async (req: Request, res: Response) =
     await prisma.clinic.update({
       where: { id: clinicId },
       data: {
-        abdm_hip_id: hipResponse.hipId,
-        abdm_registered: true,
-        abdm_registered_at: new Date(),
+        abdmHipId: hipResponse.hipId,
+        abdmRegistered: true,
+        abdmRegisteredAt: new Date(),
       },
     });
 
@@ -145,14 +145,14 @@ router.post('/consent/request', authenticate, async (req: Request, res: Response
     const { patientId, purpose, dateRange, healthInfoTypes } = req.body;
 
     const patient = await prisma.patient.findUnique({ where: { id: patientId } });
-    if (!patient?.abha_number) {
+    if (!patient?.abhaNumber) {
       res.status(400).json({ error: 'Patient does not have an ABHA number linked' });
       return;
     }
 
     const consentRequest = await abdmClient.requestConsent({
-      patientAbhaAddress: patient.abha_address!,
-      purpose: purpose || 'CAREMGT', // Care Management
+      patientAbhaAddress: patient.abhaAddress!,
+      purpose: purpose || 'CAREMGT',
       dateRange: dateRange || { from: '2020-01-01', to: new Date().toISOString().split('T')[0] },
       healthInfoTypes: healthInfoTypes || [
         'Prescription',
@@ -167,14 +167,14 @@ router.post('/consent/request', authenticate, async (req: Request, res: Response
     // Store consent request
     await prisma.abdmConsent.create({
       data: {
-        patient_id: patientId,
-        consent_request_id: consentRequest.requestId,
+        patientId,
+        consentRequestId: consentRequest.requestId,
         status: 'REQUESTED',
         purpose,
-        requested_by: (req as any).auth.doctor_id,
-        health_info_types: healthInfoTypes,
-        date_range_from: dateRange?.from ? new Date(dateRange.from) : new Date('2020-01-01'),
-        date_range_to: dateRange?.to ? new Date(dateRange.to) : new Date(),
+        requestedBy: (req as any).auth.doctor_id,
+        healthInfoTypes: healthInfoTypes,
+        dateRangeFrom: dateRange?.from ? new Date(dateRange.from) : new Date('2020-01-01'),
+        dateRangeTo: dateRange?.to ? new Date(dateRange.to) : new Date(),
       },
     });
 
@@ -203,23 +203,23 @@ router.post('/consent/callback', async (req: Request, res: Response) => {
 
     // Update consent status
     await prisma.abdmConsent.updateMany({
-      where: { consent_request_id: consentRequestId },
+      where: { consentRequestId },
       data: {
         status: status === 'GRANTED' ? 'GRANTED' : 'DENIED',
-        consent_artefact_id: consentArtefactId || null,
-        responded_at: new Date(),
+        consentArtefactId: consentArtefactId || null,
+        respondedAt: new Date(),
       },
     });
 
     // If consent granted, fetch health records
     if (status === 'GRANTED' && consentArtefactId) {
       const consent = await prisma.abdmConsent.findFirst({
-        where: { consent_request_id: consentRequestId },
+        where: { consentRequestId },
       });
 
       if (consent) {
         // Async fetch health records
-        fetchAndStoreHealthRecords(consent.patient_id, consentArtefactId).catch(console.error);
+        fetchAndStoreHealthRecords(consent.patientId, consentArtefactId).catch(console.error);
       }
     }
 
@@ -234,8 +234,8 @@ router.post('/consent/callback', async (req: Request, res: Response) => {
 router.get('/consent/:patientId', authenticate, async (req: Request, res: Response) => {
   try {
     const consents = await prisma.abdmConsent.findMany({
-      where: { patient_id: req.params.patientId },
-      orderBy: { created_at: 'desc' },
+      where: { patientId: req.params.patientId },
+      orderBy: { createdAt: 'desc' },
     });
 
     res.json(consents);
@@ -253,7 +253,7 @@ router.post('/records/push', authenticate, async (req: Request, res: Response) =
     const { patientId, consultationId } = req.body;
 
     const patient = await prisma.patient.findUnique({ where: { id: patientId } });
-    if (!patient?.abha_number) {
+    if (!patient?.abhaNumber) {
       res.status(400).json({ error: 'Patient ABHA not linked' });
       return;
     }
@@ -276,7 +276,7 @@ router.post('/records/push', authenticate, async (req: Request, res: Response) =
 
     // Push to ABDM Health Information Exchange
     const pushResponse = await abdmClient.pushHealthRecords({
-      patientAbhaAddress: patient.abha_address!,
+      patientAbhaAddress: patient.abhaAddress!,
       bundle: fhirBundle,
       careContextReference: consultationId,
     });
@@ -284,11 +284,11 @@ router.post('/records/push', authenticate, async (req: Request, res: Response) =
     // Record the push
     await prisma.abdmHealthRecord.create({
       data: {
-        patient_id: patientId,
-        consultation_id: consultationId,
-        record_type: 'OPConsultation',
-        pushed_at: new Date(),
-        transaction_id: pushResponse.transactionId,
+        patientId,
+        consultationId,
+        recordType: 'OPConsultation',
+        pushedAt: new Date(),
+        transactionId: pushResponse.transactionId,
         status: 'PUSHED',
       },
     });
@@ -321,16 +321,16 @@ function verifyAbdmCallback(req: Request): boolean {
 
 async function fetchAndStoreHealthRecords(patientId: string, consentArtefactId: string) {
   try {
-    const records = await abdmClient.fetchHealthRecords(consentArtefactId);
+    const records = await abdmClient.fetchHealthRecords(consentArtefactId) as any[];
 
     for (const record of records) {
       await prisma.abdmHealthRecord.create({
         data: {
-          patient_id: patientId,
-          record_type: record.resourceType || 'Unknown',
-          source_hip: record.hipId || 'unknown',
-          fetched_at: new Date(),
-          fhir_resource: record.data,
+          patientId,
+          recordType: record.resourceType || 'Unknown',
+          sourceHip: record.hipId || 'unknown',
+          fetchedAt: new Date(),
+          fhirResource: record.data,
           status: 'RECEIVED',
         },
       });
@@ -353,8 +353,8 @@ function buildFhirBundleForAbdm(patient: any, consultation: any) {
             coding: [{ system: 'https://nrces.in/ndhm/fhir/r4/CodeSystem/ndhm-document-type', code: 'OP Consultation', display: 'OP Consultation' }],
           },
           subject: { reference: `Patient/${patient.id}` },
-          date: consultation.created_at,
-          author: [{ display: `Dr. ${consultation.doctor?.first_name} ${consultation.doctor?.last_name}` }],
+          date: consultation.createdAt,
+          author: [{ display: consultation.doctor?.name ?? 'Doctor' }],
           title: 'OP Consultation Record',
           section: [
             {
@@ -367,10 +367,9 @@ function buildFhirBundleForAbdm(patient: any, consultation: any) {
       {
         resource: {
           resourceType: 'Patient',
-          identifier: [{ system: 'https://healthid.ndhm.gov.in', value: patient.abha_number }],
-          name: [{ text: `${patient.first_name} ${patient.last_name}` }],
-          gender: patient.gender,
-          birthDate: patient.date_of_birth?.toISOString().split('T')[0],
+          identifier: [{ system: 'https://healthid.ndhm.gov.in', value: patient.abhaNumber }],
+          name: [{ text: patient.phone }],
+          gender: 'unknown',
         },
       },
     ],
