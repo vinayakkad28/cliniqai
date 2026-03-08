@@ -22,6 +22,12 @@ import { abdmRouter, abdmCallbackRouter } from "./routes/abdm.js";
 import { clinicRouter } from "./routes/clinic.js";
 import { auditLogger } from "./middleware/auditLogger.js";
 import { apiRateLimiter } from "./middleware/rateLimiter.js";
+import whatsappBotRouter from "./routes/whatsappBot.js";
+import ePrescriptionRouter from "./routes/ePrescription.js";
+import eventsRouter from "./routes/events.js";
+import abdmFullRouter from "./routes/abdmFull.js";
+import { tracingMiddleware } from "./lib/monitoring.js";
+import { healthCheck } from "./lib/monitoring.js";
 
 // Prevent unhandled rejections from crashing the process in dev
 process.on("unhandledRejection", (reason) => {
@@ -50,15 +56,23 @@ app.use(express.urlencoded({ extended: true }));
 // HTTP request logging (no PHI — morgan uses predefined tokens only)
 app.use(morgan("[:date[iso]] :method :url :status :response-time ms"));
 
+// Distributed tracing
+app.use(tracingMiddleware);
+
 // Rate limiting
 app.use("/api", apiRateLimiter);
 
 // Audit logging (every authenticated request)
 app.use("/api", auditLogger);
 
-// Health check (unauthenticated)
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "cliniqai-api", timestamp: new Date().toISOString() });
+// Health check (unauthenticated) — enhanced with dependency checks
+app.get("/health", async (_req, res) => {
+  try {
+    const health = await healthCheck();
+    res.status(health.status === "healthy" ? 200 : 503).json(health);
+  } catch {
+    res.json({ status: "ok", service: "cliniqai-api", timestamp: new Date().toISOString() });
+  }
 });
 
 // API routes
@@ -80,6 +94,11 @@ app.use("/api/clinic", clinicRouter);
 app.use("/api/abdm", abdmRouter);
 // ABDM gateway callback — unauthenticated, whitelist in prod by IP
 app.use("/api/abdm/callback", abdmCallbackRouter);
+// New feature routes
+app.use("/api/whatsapp", whatsappBotRouter);
+app.use("/api/e-prescription", ePrescriptionRouter);
+app.use("/api/events", eventsRouter);
+app.use("/api/abdm-v2", abdmFullRouter);
 
 // 404 handler
 app.use((_req, res) => {
