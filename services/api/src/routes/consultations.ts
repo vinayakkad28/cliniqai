@@ -88,7 +88,7 @@ consultationsRouter.get("/", requireScope("consultations:read"), async (req, res
   const where = {
     doctorId: req.user!.doctor_id!,
     ...(patientId ? { patientId } : {}),
-    ...(status ? { status } : {}),
+    ...(status ? { status: status as import("@prisma/client").ConsultationStatus } : {}),
   };
 
   const [total, data] = await Promise.all([

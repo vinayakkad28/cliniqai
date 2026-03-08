@@ -83,7 +83,7 @@ export interface WorkingHour {
 
 export const doctors = {
   getMe: () => request<{ id: string; name: string; specialties: string[]; bio: string | null; workingHours: WorkingHour[] }>("GET", "/doctors/me"),
-  patchMe: (data: { name?: string; bio?: string; specialties?: string[] }) =>
+  patchMe: (data: { name?: string; bio?: string; specialties?: string[]; licenseNumber?: string }) =>
     request("PATCH", "/doctors/me", data),
   getWorkingHours: () => request<WorkingHour[]>("GET", "/doctors/me/working-hours"),
   putWorkingHours: (hours: Omit<WorkingHour, "id">[]) =>
