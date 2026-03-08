@@ -1,28 +1,29 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Text, Platform } from 'react-native';
+import { colors } from '../../theme';
 
 export default function PatientTabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#1d4ed8',
-        tabBarInactiveTintColor: '#9ca3af',
+        tabBarActiveTintColor: colors.primary[600],
+        tabBarInactiveTintColor: colors.text.disabled,
         tabBarStyle: {
-          backgroundColor: '#ffffff',
+          backgroundColor: colors.white,
           borderTopWidth: 1,
-          borderTopColor: '#f3f4f6',
-          paddingBottom: 8,
+          borderTopColor: colors.borderLight,
+          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
           paddingTop: 8,
-          height: 65,
+          height: Platform.OS === 'ios' ? 88 : 65,
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
         },
         headerStyle: {
-          backgroundColor: '#1d4ed8',
+          backgroundColor: colors.primary[600],
         },
-        headerTintColor: '#ffffff',
+        headerTintColor: colors.white,
         headerTitleStyle: {
           fontWeight: 'bold',
         },
@@ -73,7 +74,6 @@ export default function PatientTabLayout() {
 }
 
 function TabIcon({ name, color }: { name: string; color: string }) {
-  // Simple text-based icons
   const icons: Record<string, string> = {
     home: '🏠',
     records: '📋',

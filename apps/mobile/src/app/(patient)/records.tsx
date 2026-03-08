@@ -32,10 +32,10 @@ export default function HealthRecords() {
   };
 
   const typeColors: Record<string, string> = {
-    prescription: '#3b82f6',
+    prescription: colors.info.main,
     lab: '#8b5cf6',
-    visit: '#10b981',
-    imaging: '#f59e0b',
+    visit: colors.success.main,
+    imaging: colors.warning.main,
   };
 
   return (
@@ -69,7 +69,7 @@ export default function HealthRecords() {
                 {new Date(record.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
               </Text>
             </View>
-            <Text style={{ color: '#9ca3af', fontSize: 18 }}>›</Text>
+            <Text style={{ color: colors.text.disabled, fontSize: 18 }}>›</Text>
           </TouchableOpacity>
         ))}
         <View style={{ height: 40 }} />
@@ -79,15 +79,15 @@ export default function HealthRecords() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  filterContainer: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6', maxHeight: 56 },
-  filterTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f3f4f6', marginRight: 8 },
-  filterTabActive: { backgroundColor: '#1d4ed8' },
-  filterText: { fontSize: 13, fontWeight: '500', color: '#6b7280' },
-  filterTextActive: { color: '#ffffff' },
-  recordCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#ffffff', marginHorizontal: 16, marginTop: 8, padding: 16, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  filterContainer: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.borderLight, maxHeight: 56 },
+  filterTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.borderLight, marginRight: 8 },
+  filterTabActive: { backgroundColor: colors.primary[600] },
+  filterText: { fontSize: 13, fontWeight: '500', color: colors.text.tertiary },
+  filterTextActive: { color: colors.white },
+  recordCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.white, marginHorizontal: 16, marginTop: 8, padding: 16, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
   recordIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  recordTitle: { fontSize: 14, fontWeight: '600', color: '#1f2937' },
-  recordDesc: { fontSize: 12, color: '#6b7280', marginTop: 2, lineHeight: 16 },
-  recordDate: { fontSize: 11, color: '#9ca3af', marginTop: 4 },
+  recordTitle: { fontSize: 14, fontWeight: '600', color: colors.text.secondary },
+  recordDesc: { fontSize: 12, color: colors.text.tertiary, marginTop: 2, lineHeight: 16 },
+  recordDate: { fontSize: 11, color: colors.text.disabled, marginTop: 4 },
 });

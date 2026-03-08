@@ -37,7 +37,6 @@ export default function AnalyticsPage() {
         api.patients.list(token!, { page: 1, limit: 1 }),
       ]);
 
-      // Build analytics from available data
       setData({
         totalPatients: patientsRes.total || 0,
         totalConsultations: revenueRes.totalInvoices || 0,
@@ -94,19 +93,19 @@ export default function AnalyticsPage() {
     return (
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Practice Analytics</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Practice Analytics</h1>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-xl shadow-sm border p-6 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-24 mb-3" />
-              <div className="h-8 bg-gray-200 rounded w-16" />
+            <div key={i} className="cliniq-card p-6 animate-pulse">
+              <div className="h-4 bg-slate-200 rounded w-24 mb-3" />
+              <div className="h-8 bg-slate-200 rounded w-16" />
             </div>
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-xl shadow-sm border p-6 animate-pulse h-64" />
+            <div key={i} className="cliniq-card p-6 animate-pulse h-64" />
           ))}
         </div>
       </div>
@@ -117,23 +116,22 @@ export default function AnalyticsPage() {
 
   const maxDiagCount = Math.max(...data.topDiagnoses.map((d) => d.count));
   const maxHourCount = Math.max(...data.consultationsByHour.map((h) => h.count));
-  const maxAiCount = Math.max(...data.aiUsageStats.map((a) => a.count));
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Practice Analytics</h1>
-          <p className="text-sm text-gray-500 mt-1">Insights to grow your practice</p>
+          <h1 className="text-2xl font-bold text-slate-900">Practice Analytics</h1>
+          <p className="text-sm text-slate-500 mt-1">Insights to grow your practice</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 bg-slate-100 rounded-lg p-1">
           {(['7d', '30d', '90d', '1y'] as const).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                period === p ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-150 ${
+                period === p ? 'bg-white text-primary-700 shadow-xs' : 'text-slate-600 hover:text-slate-800'
               }`}
             >
               {p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : p === '90d' ? '90 Days' : '1 Year'}
@@ -146,21 +144,15 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard title="Total Patients" value={data.totalPatients.toLocaleString()} icon="👥" change="+12%" positive />
         <KPICard title="Consultations" value={data.totalConsultations.toLocaleString()} icon="🩺" change="+8%" positive />
-        <KPICard
-          title="Revenue"
-          value={`₹${(data.totalRevenue / 1000).toFixed(1)}K`}
-          icon="💰"
-          change="+15%"
-          positive
-        />
+        <KPICard title="Revenue" value={`₹${(data.totalRevenue / 1000).toFixed(1)}K`} icon="💰" change="+15%" positive />
         <KPICard title="Avg Duration" value={`${data.avgConsultationDuration} min`} icon="⏱️" change="-2 min" positive />
       </div>
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Revenue Trend */}
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Trend</h3>
+        <div className="cliniq-card-elevated p-6">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Revenue Trend</h3>
           <div className="flex items-end gap-1 h-48">
             {data.dailyRevenue.length > 0
               ? data.dailyRevenue.slice(-30).map((d, i) => {
@@ -169,7 +161,7 @@ export default function AnalyticsPage() {
                   return (
                     <div
                       key={i}
-                      className="flex-1 bg-blue-500 rounded-t hover:bg-blue-600 transition-colors group relative"
+                      className="flex-1 bg-primary-500 rounded-t hover:bg-primary-600 transition-colors"
                       style={{ height: `${height}%`, minHeight: '4px' }}
                       title={`${d.date}: ₹${d.amount}`}
                     />
@@ -177,25 +169,25 @@ export default function AnalyticsPage() {
                 })
               : Array.from({ length: 30 }, (_, i) => {
                   const h = Math.random() * 80 + 20;
-                  return <div key={i} className="flex-1 bg-blue-500 rounded-t" style={{ height: `${h}%` }} />;
+                  return <div key={i} className="flex-1 bg-primary-400 rounded-t" style={{ height: `${h}%` }} />;
                 })}
           </div>
-          <div className="flex justify-between mt-2 text-xs text-gray-400">
+          <div className="flex justify-between mt-2 text-2xs text-slate-400">
             <span>30 days ago</span>
             <span>Today</span>
           </div>
         </div>
 
         {/* Top Diagnoses */}
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Diagnoses</h3>
+        <div className="cliniq-card-elevated p-6">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Top Diagnoses</h3>
           <div className="space-y-3">
             {data.topDiagnoses.slice(0, 8).map((d, i) => (
               <div key={i} className="flex items-center gap-3">
-                <span className="text-sm text-gray-600 w-48 truncate">{d.name}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
+                <span className="text-sm text-slate-600 w-48 truncate">{d.name}</span>
+                <div className="flex-1 bg-slate-100 rounded-full h-6 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-end pr-2"
+                    className="h-full bg-gradient-to-r from-primary-500 to-primary-400 rounded-full flex items-center justify-end pr-2"
                     style={{ width: `${(d.count / maxDiagCount) * 100}%` }}
                   >
                     <span className="text-xs text-white font-medium">{d.count}</span>
@@ -210,21 +202,21 @@ export default function AnalyticsPage() {
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Appointment Types */}
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Appointment Types</h3>
+        <div className="cliniq-card-elevated p-6">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Appointment Types</h3>
           <div className="space-y-4">
             {data.appointmentsByType.map((a, i) => {
               const total = data.appointmentsByType.reduce((s, x) => s + x.count, 0);
               const pct = Math.round((a.count / total) * 100);
-              const colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-amber-500'];
+              const colors = ['bg-primary-500', 'bg-green-500', 'bg-secondary-500', 'bg-accent-500'];
               return (
                 <div key={i}>
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-700">{a.type}</span>
-                    <span className="text-gray-500">{pct}%</span>
+                    <span className="text-slate-700">{a.type}</span>
+                    <span className="text-slate-500 font-mono text-xs">{pct}%</span>
                   </div>
-                  <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                    <div className={`h-full ${colors[i]} rounded-full`} style={{ width: `${pct}%` }} />
+                  <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full ${colors[i]} rounded-full transition-all`} style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               );
@@ -233,20 +225,20 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Patient Demographics */}
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Patient Age Distribution</h3>
+        <div className="cliniq-card-elevated p-6">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Patient Age Distribution</h3>
           <div className="flex items-end gap-3 h-40 mt-4">
             {data.patientDemographics.map((d, i) => {
               const maxCount = Math.max(...data.patientDemographics.map((p) => p.count));
               const height = (d.count / maxCount) * 100;
               return (
                 <div key={i} className="flex-1 flex flex-col items-center">
-                  <span className="text-xs text-gray-500 mb-1">{d.count}%</span>
+                  <span className="text-xs text-slate-500 mb-1">{d.count}%</span>
                   <div
-                    className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t"
+                    className="w-full bg-gradient-to-t from-primary-600 to-primary-300 rounded-t"
                     style={{ height: `${height}%` }}
                   />
-                  <span className="text-xs text-gray-500 mt-2">{d.ageGroup}</span>
+                  <span className="text-xs text-slate-500 mt-2">{d.ageGroup}</span>
                 </div>
               );
             })}
@@ -254,8 +246,8 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Peak Hours */}
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Busiest Hours</h3>
+        <div className="cliniq-card-elevated p-6">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Busiest Hours</h3>
           <div className="flex items-end gap-1 h-40">
             {data.consultationsByHour.map((h, i) => {
               const height = (h.count / maxHourCount) * 100;
@@ -263,31 +255,31 @@ export default function AnalyticsPage() {
               return (
                 <div key={i} className="flex-1 flex flex-col items-center">
                   <div
-                    className={`w-full rounded-t ${isPeak ? 'bg-red-500' : 'bg-blue-400'}`}
+                    className={`w-full rounded-t transition-colors ${isPeak ? 'bg-critical-500' : 'bg-primary-400'}`}
                     style={{ height: `${height}%`, minHeight: '8px' }}
                     title={`${h.hour}:00 - ${h.count} consultations`}
                   />
-                  <span className="text-[10px] text-gray-400 mt-1">{h.hour}</span>
+                  <span className="text-2xs text-slate-400 mt-1 font-mono">{h.hour}</span>
                 </div>
               );
             })}
           </div>
-          <p className="text-xs text-gray-400 mt-2 text-center">Hours (24h format)</p>
+          <p className="text-2xs text-slate-400 mt-2 text-center">Hours (24h format)</p>
         </div>
       </div>
 
       {/* AI Usage Stats */}
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">AI Feature Usage</h3>
+      <div className="cliniq-card-elevated p-6">
+        <h3 className="text-lg font-semibold text-slate-900 mb-4">AI Feature Usage</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {data.aiUsageStats.map((stat, i) => (
-            <div key={i} className="flex items-center gap-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">
-                AI
+            <div key={i} className="flex items-center gap-3 p-3 bg-gradient-to-r from-secondary-50 to-primary-50 rounded-lg border border-secondary-100/50">
+              <div className="w-10 h-10 rounded-full bg-gradient-ai flex items-center justify-center">
+                <span className="text-white text-xs font-bold">AI</span>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">{stat.feature}</p>
-                <p className="text-lg font-bold text-blue-600">{stat.count}</p>
+                <p className="text-sm font-medium text-slate-700">{stat.feature}</p>
+                <p className="text-lg font-bold text-secondary-600">{stat.count}</p>
               </div>
             </div>
           ))}
@@ -296,24 +288,24 @@ export default function AnalyticsPage() {
 
       {/* Insights Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl p-6 text-white">
+        <div className="bg-gradient-to-br from-primary-600 to-primary-800 rounded-xl p-6 text-white">
           <h3 className="text-lg font-semibold mb-3">Practice Growth Insights</h3>
-          <ul className="space-y-2 text-sm text-blue-100">
-            <li>• Your patient volume increased by 12% this month</li>
-            <li>• Tuesday and Thursday are your busiest days</li>
-            <li>• AI-assisted prescriptions save you ~3 min per consultation</li>
-            <li>• {data.weeklyRetention}% of patients return within 30 days</li>
-            <li>• Consider extending evening hours — 6-8 PM shows high demand</li>
+          <ul className="space-y-2 text-sm text-primary-100">
+            <li>Your patient volume increased by 12% this month</li>
+            <li>Tuesday and Thursday are your busiest days</li>
+            <li>AI-assisted prescriptions save you ~3 min per consultation</li>
+            <li>{data.weeklyRetention}% of patients return within 30 days</li>
+            <li>Consider extending evening hours — 6-8 PM shows high demand</li>
           </ul>
         </div>
         <div className="bg-gradient-to-br from-green-600 to-emerald-700 rounded-xl p-6 text-white">
           <h3 className="text-lg font-semibold mb-3">Revenue Optimization</h3>
           <ul className="space-y-2 text-sm text-green-100">
-            <li>• Average consultation fee: ₹{Math.round(data.totalRevenue / Math.max(data.totalConsultations, 1))}</li>
-            <li>• Telemedicine consults generate 20% higher margins</li>
-            <li>• Lab orders contribute 15% of total revenue</li>
-            <li>• Pharmacy dispensing adds ₹45 avg per consultation</li>
-            <li>• Enable follow-up reminders to increase return visits by 25%</li>
+            <li>Average consultation fee: ₹{Math.round(data.totalRevenue / Math.max(data.totalConsultations, 1))}</li>
+            <li>Telemedicine consults generate 20% higher margins</li>
+            <li>Lab orders contribute 15% of total revenue</li>
+            <li>Pharmacy dispensing adds ₹45 avg per consultation</li>
+            <li>Enable follow-up reminders to increase return visits by 25%</li>
           </ul>
         </div>
       </div>
@@ -321,27 +313,17 @@ export default function AnalyticsPage() {
   );
 }
 
-function KPICard({
-  title,
-  value,
-  icon,
-  change,
-  positive,
-}: {
-  title: string;
-  value: string;
-  icon: string;
-  change: string;
-  positive: boolean;
+function KPICard({ title, value, icon, change, positive }: {
+  title: string; value: string; icon: string; change: string; positive: boolean;
 }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border p-6">
+    <div className="cliniq-card-elevated p-6">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm text-gray-500">{title}</span>
+        <span className="text-sm text-slate-500">{title}</span>
         <span className="text-2xl">{icon}</span>
       </div>
-      <div className="text-2xl font-bold text-gray-900">{value}</div>
-      <div className={`text-sm mt-1 ${positive ? 'text-green-600' : 'text-red-600'}`}>{change} vs last period</div>
+      <div className="text-2xl font-bold text-slate-900">{value}</div>
+      <div className={`text-sm mt-1 font-medium ${positive ? 'text-green-600' : 'text-red-600'}`}>{change} vs last period</div>
     </div>
   );
 }

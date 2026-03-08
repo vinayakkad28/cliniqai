@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 
-const BLUE = "#1d4ed8";
+const BLUE = colors.primary[600];
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3001";
 
 type Step = "phone" | "otp";

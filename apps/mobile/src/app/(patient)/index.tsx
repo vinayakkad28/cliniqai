@@ -25,10 +25,10 @@ export default function PatientHome() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActions}>
-          <QuickAction icon="📅" label="Book Appointment" onPress={() => router.push('/(patient)/book')} color="#3b82f6" />
-          <QuickAction icon="💊" label="My Medicines" onPress={() => router.push('/(patient)/medications')} color="#10b981" />
+          <QuickAction icon="📅" label="Book Appointment" onPress={() => router.push('/(patient)/book')} color=colors.info.main />
+          <QuickAction icon="💊" label="My Medicines" onPress={() => router.push('/(patient)/medications')} color=colors.success.main />
           <QuickAction icon="🔬" label="Lab Reports" onPress={() => router.push('/(patient)/records')} color="#8b5cf6" />
-          <QuickAction icon="📞" label="Video Consult" onPress={() => {}} color="#f59e0b" />
+          <QuickAction icon="📞" label="Video Consult" onPress={() => {}} color=colors.warning.main />
         </View>
       </View>
 
@@ -46,8 +46,8 @@ export default function PatientHome() {
               <Text style={styles.specialty}>General Medicine</Text>
               <Text style={styles.time}>10:30 AM - 11:00 AM</Text>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: '#dbeafe' }]}>
-              <Text style={[styles.statusText, { color: '#1d4ed8' }]}>Confirmed</Text>
+            <View style={[styles.statusBadge, { backgroundColor: colors.primary[100] }]}>
+              <Text style={[styles.statusText, { color: colors.primary[600] }]}>Confirmed</Text>
             </View>
           </View>
         </View>
@@ -107,12 +107,12 @@ function QuickAction({ icon, label, onPress, color }: { icon: string; label: str
 function MedicationItem({ name, time, status }: { name: string; time: string; status: 'taken' | 'upcoming' | 'missed' }) {
   return (
     <View style={styles.medItem}>
-      <View style={[styles.medDot, { backgroundColor: status === 'taken' ? '#10b981' : status === 'missed' ? '#ef4444' : '#f59e0b' }]} />
+      <View style={[styles.medDot, { backgroundColor: status === 'taken' ? colors.success.main : status === 'missed' ? colors.critical.main : colors.warning.main }]} />
       <View style={{ flex: 1 }}>
         <Text style={styles.medName}>{name}</Text>
         <Text style={styles.medTime}>{time}</Text>
       </View>
-      <Text style={[styles.medStatus, { color: status === 'taken' ? '#10b981' : status === 'missed' ? '#ef4444' : '#9ca3af' }]}>
+      <Text style={[styles.medStatus, { color: status === 'taken' ? colors.success.main : status === 'missed' ? colors.critical.main : colors.text.disabled }]}>
         {status === 'taken' ? '✓ Taken' : status === 'missed' ? '✗ Missed' : 'Upcoming'}
       </Text>
     </View>
@@ -120,32 +120,32 @@ function MedicationItem({ name, time, status }: { name: string; time: string; st
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  greetingCard: { backgroundColor: '#1d4ed8', padding: 24, paddingTop: 16 },
-  greetingText: { fontSize: 26, fontWeight: 'bold', color: '#ffffff' },
+  container: { flex: 1, backgroundColor: colors.bg },
+  greetingCard: { backgroundColor: colors.primary[600], padding: 24, paddingTop: 16 },
+  greetingText: { fontSize: 26, fontWeight: 'bold', color: colors.white },
   greetingSubtext: { fontSize: 14, color: '#93c5fd', marginTop: 4 },
   section: { padding: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1f2937', marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text.secondary, marginBottom: 12 },
   quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   quickAction: { width: '47%', padding: 16, borderRadius: 12, alignItems: 'center', gap: 8 },
   quickActionLabel: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
-  card: { backgroundColor: '#ffffff', borderRadius: 12, padding: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  card: { backgroundColor: colors.white, borderRadius: 12, padding: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   appointmentRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   dateBox: { width: 48, height: 48, backgroundColor: '#eff6ff', borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  dateDay: { fontSize: 18, fontWeight: 'bold', color: '#1d4ed8' },
+  dateDay: { fontSize: 18, fontWeight: 'bold', color: colors.primary[600] },
   dateMonth: { fontSize: 10, color: '#60a5fa', fontWeight: '600' },
-  doctorName: { fontSize: 15, fontWeight: '600', color: '#1f2937' },
-  specialty: { fontSize: 12, color: '#6b7280' },
-  time: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
+  doctorName: { fontSize: 15, fontWeight: '600', color: colors.text.secondary },
+  specialty: { fontSize: 12, color: colors.text.tertiary },
+  time: { fontSize: 12, color: colors.text.disabled, marginTop: 2 },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   statusText: { fontSize: 11, fontWeight: '600' },
-  medItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  medItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   medDot: { width: 8, height: 8, borderRadius: 4 },
-  medName: { fontSize: 14, fontWeight: '500', color: '#1f2937' },
-  medTime: { fontSize: 12, color: '#9ca3af' },
+  medName: { fontSize: 14, fontWeight: '500', color: colors.text.secondary },
+  medTime: { fontSize: 12, color: colors.text.disabled },
   medStatus: { fontSize: 12, fontWeight: '500' },
   healthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   healthCard: { width: '47%', padding: 16, borderRadius: 12, alignItems: 'center', gap: 6 },
-  healthValue: { fontSize: 20, fontWeight: 'bold', color: '#1f2937' },
-  healthLabel: { fontSize: 11, color: '#6b7280' },
+  healthValue: { fontSize: 20, fontWeight: 'bold', color: colors.text.secondary },
+  healthLabel: { fontSize: 11, color: colors.text.tertiary },
 });

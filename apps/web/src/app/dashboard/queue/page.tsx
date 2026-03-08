@@ -25,17 +25,17 @@ const MOCK_QUEUE: QueueEntry[] = [
 ];
 
 const STATUS_CONFIG: Record<QueueEntry["status"], { bg: string; text: string; label: string }> = {
-  "in-progress": { bg: "bg-blue-100", text: "text-blue-700", label: "In Progress" },
+  "in-progress": { bg: "bg-primary-100", text: "text-primary-700", label: "In Progress" },
   called: { bg: "bg-green-100", text: "text-green-700", label: "Called" },
-  waiting: { bg: "bg-gray-100", text: "text-gray-600", label: "Waiting" },
-  completed: { bg: "bg-gray-50", text: "text-gray-400", label: "Done" },
+  waiting: { bg: "bg-slate-100", text: "text-slate-600", label: "Waiting" },
+  completed: { bg: "bg-slate-50", text: "text-slate-400", label: "Done" },
 };
 
 function CurrentToken({ entry }: { entry: QueueEntry }) {
   return (
-    <div className="bg-blue-600 text-white rounded-2xl p-8 text-center">
-      <p className="text-sm uppercase tracking-wide opacity-80 mb-1">Now Serving</p>
-      <p className="text-8xl font-bold my-4">{entry.tokenNo}</p>
+    <div className="bg-gradient-primary text-white rounded-2xl p-8 text-center shadow-glow">
+      <p className="text-sm uppercase tracking-widest opacity-80 mb-1">Now Serving</p>
+      <p className="text-8xl font-extrabold my-4">{entry.tokenNo}</p>
       <p className="text-2xl font-semibold">{entry.patientName}</p>
       <p className="text-lg opacity-80 mt-1">{entry.doctorName} &middot; {entry.appointmentType}</p>
     </div>
@@ -45,10 +45,10 @@ function CurrentToken({ entry }: { entry: QueueEntry }) {
 function NextToken({ entry }: { entry: QueueEntry }) {
   return (
     <div className="bg-green-50 border-2 border-green-200 rounded-xl p-6 text-center">
-      <p className="text-xs uppercase tracking-wide text-green-600 font-medium mb-1">Next</p>
+      <p className="text-xs uppercase tracking-widest text-green-600 font-semibold mb-1">Next</p>
       <p className="text-5xl font-bold text-green-700 my-2">{entry.tokenNo}</p>
-      <p className="text-lg font-semibold text-gray-800">{entry.patientName}</p>
-      <p className="text-sm text-gray-500">{entry.doctorName}</p>
+      <p className="text-lg font-semibold text-slate-800">{entry.patientName}</p>
+      <p className="text-sm text-slate-500">{entry.doctorName}</p>
     </div>
   );
 }
@@ -59,13 +59,11 @@ export default function QueueDisplayPage() {
   const [clock, setClock] = useState(new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Update clock every second
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // SSE for real-time queue updates
   useEffect(() => {
     if (!token) return;
     const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -99,21 +97,18 @@ export default function QueueDisplayPage() {
   const completed = queue.filter((q) => q.status === "completed");
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-surface-secondary p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Clinic Queue</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-3xl font-bold text-slate-900">Clinic Queue</h1>
+          <p className="text-slate-500 mt-1">
             {clock.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
             {" "}&middot;{" "}
-            {clock.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            <span className="font-mono">{clock.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
           </p>
         </div>
-        <button
-          onClick={toggleFullscreen}
-          className="px-4 py-2 bg-white border rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
-        >
+        <button onClick={toggleFullscreen} className="cliniq-btn-secondary">
           {isFullscreen ? "Exit Fullscreen" : "Fullscreen (TV Mode)"}
         </button>
       </div>
@@ -127,44 +122,43 @@ export default function QueueDisplayPage() {
 
           {/* Stats */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-              <p className="text-3xl font-bold text-gray-900">{waiting.length}</p>
-              <p className="text-xs text-gray-500 mt-1">Waiting</p>
+            <div className="cliniq-card p-4 text-center">
+              <p className="text-3xl font-bold text-slate-900">{waiting.length}</p>
+              <p className="text-xs text-slate-500 mt-1">Waiting</p>
             </div>
-            <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-              <p className="text-3xl font-bold text-gray-900">{completed.length}</p>
-              <p className="text-xs text-gray-500 mt-1">Completed</p>
+            <div className="cliniq-card p-4 text-center">
+              <p className="text-3xl font-bold text-slate-900">{completed.length}</p>
+              <p className="text-xs text-slate-500 mt-1">Completed</p>
             </div>
           </div>
         </div>
 
         {/* Right: Queue List */}
         <div className="col-span-2">
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            <div className="bg-gray-800 text-white px-6 py-3 grid grid-cols-5 text-sm font-medium">
+          <div className="cliniq-card-elevated overflow-hidden">
+            <div className="bg-primary-900 text-white px-6 py-3 grid grid-cols-5 text-sm font-medium">
               <span>Token</span>
               <span>Patient</span>
               <span>Doctor</span>
               <span>Type</span>
               <span className="text-right">Est. Wait</span>
             </div>
-            <div className="divide-y divide-gray-100">
-              {/* Current + Called first, then waiting */}
+            <div className="divide-y divide-slate-50">
               {[...(current ? [current] : []), ...(next ? [next] : []), ...waiting].map((entry) => {
                 const cfg = STATUS_CONFIG[entry.status];
                 return (
                   <div
                     key={entry.tokenNo}
                     className={`px-6 py-4 grid grid-cols-5 items-center text-sm ${
-                      entry.status === "in-progress" ? "bg-blue-50" : entry.status === "called" ? "bg-green-50" : ""
+                      entry.status === "in-progress" ? "bg-primary-50" : entry.status === "called" ? "bg-green-50" : ""
                     }`}
                   >
-                    <span className="text-2xl font-bold text-gray-900">{entry.tokenNo}</span>
-                    <span className="font-medium text-gray-800">{entry.patientName}</span>
-                    <span className="text-gray-600">{entry.doctorName}</span>
-                    <span className="text-gray-600">{entry.appointmentType}</span>
+                    <span className="text-2xl font-bold text-slate-900">{entry.tokenNo}</span>
+                    <span className="font-medium text-slate-800">{entry.patientName}</span>
+                    <span className="text-slate-600">{entry.doctorName}</span>
+                    <span className="text-slate-600">{entry.appointmentType}</span>
                     <span className="text-right">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.bg} ${cfg.text}`}>
+                      <span className={`cliniq-badge ${cfg.bg} ${cfg.text}`}>
                         {entry.status === "in-progress" || entry.status === "called"
                           ? cfg.label
                           : entry.estimatedTime ?? "—"}
@@ -176,20 +170,19 @@ export default function QueueDisplayPage() {
             </div>
           </div>
 
-          {/* Completed (collapsed) */}
           {completed.length > 0 && (
             <details className="mt-4">
-              <summary className="text-sm text-gray-500 cursor-pointer hover:text-gray-700">
+              <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-700">
                 {completed.length} completed today
               </summary>
-              <div className="mt-2 bg-white rounded-xl shadow-sm overflow-hidden opacity-60">
+              <div className="mt-2 cliniq-card overflow-hidden opacity-60">
                 {completed.map((entry) => (
-                  <div key={entry.tokenNo} className="px-6 py-3 grid grid-cols-5 items-center text-sm border-b border-gray-50">
-                    <span className="font-bold text-gray-400">{entry.tokenNo}</span>
-                    <span className="text-gray-400">{entry.patientName}</span>
-                    <span className="text-gray-400">{entry.doctorName}</span>
-                    <span className="text-gray-400">{entry.appointmentType}</span>
-                    <span className="text-right text-gray-400 text-xs">Done</span>
+                  <div key={entry.tokenNo} className="px-6 py-3 grid grid-cols-5 items-center text-sm border-b border-slate-50">
+                    <span className="font-bold text-slate-400">{entry.tokenNo}</span>
+                    <span className="text-slate-400">{entry.patientName}</span>
+                    <span className="text-slate-400">{entry.doctorName}</span>
+                    <span className="text-slate-400">{entry.appointmentType}</span>
+                    <span className="text-right text-slate-400 text-xs">Done</span>
                   </div>
                 ))}
               </div>

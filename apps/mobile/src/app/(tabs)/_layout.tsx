@@ -1,24 +1,20 @@
 import { Tabs } from "expo-router";
 import { Platform } from "react-native";
+import { colors } from "../../theme";
 
-const BLUE = "#1d4ed8";
-const GRAY = "#9ca3af";
-
-function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
-  return (
-    <>{emoji}</>
-  );
+function TabIcon({ emoji }: { emoji: string; focused: boolean }) {
+  return <>{emoji}</>;
 }
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: BLUE,
-        tabBarInactiveTintColor: GRAY,
+        tabBarActiveTintColor: colors.primary[600],
+        tabBarInactiveTintColor: colors.text.disabled,
         tabBarStyle: {
-          backgroundColor: "#fff",
-          borderTopColor: "#e5e7eb",
+          backgroundColor: colors.white,
+          borderTopColor: colors.border,
           height: Platform.OS === "ios" ? 88 : 64,
           paddingBottom: Platform.OS === "ios" ? 28 : 8,
           paddingTop: 8,
@@ -28,14 +24,14 @@ export default function TabLayout() {
           fontWeight: "600",
         },
         headerStyle: {
-          backgroundColor: "#fff",
+          backgroundColor: colors.white,
           shadowColor: "transparent",
           elevation: 0,
           borderBottomWidth: 1,
-          borderBottomColor: "#e5e7eb",
+          borderBottomColor: colors.border,
         },
         headerTitleStyle: {
-          color: "#111827",
+          color: colors.text.primary,
           fontWeight: "700",
           fontSize: 18,
         },

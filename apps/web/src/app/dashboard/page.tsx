@@ -52,18 +52,18 @@ export default function DashboardPage() {
   const completedAppts = todayAppts.filter((a) => a.status === "completed");
 
   return (
-    <div>
+    <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-slate-900">
           Good {greeting()}, {user?.doctor?.name ? `Dr. ${user.doctor.name.split(" ")[0]}` : "Doctor"}
         </h1>
-        <p className="text-sm text-gray-500 mt-1">{todayDate}</p>
+        <p className="text-sm text-slate-500 mt-1">{todayDate}</p>
       </div>
 
       {/* Active consultations alert */}
       {activeConsultations.length > 0 && (
-        <div className="mb-6 rounded-xl border border-purple-200 bg-purple-50 p-4">
-          <p className="text-sm font-semibold text-purple-800 mb-2">
+        <div className="mb-6 rounded-xl border border-secondary-200 bg-secondary-50 p-4 animate-slide-up">
+          <p className="text-sm font-semibold text-secondary-800 mb-2">
             🩺 {activeConsultations.length} active consultation{activeConsultations.length !== 1 ? "s" : ""} in progress
           </p>
           <div className="flex flex-wrap gap-2">
@@ -71,11 +71,11 @@ export default function DashboardPage() {
               <Link
                 key={c.id}
                 href={`/dashboard/consultations/${c.id}`}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white border border-purple-200 px-3 py-1 text-xs font-medium text-purple-700 hover:bg-purple-50"
+                className="inline-flex items-center gap-1.5 rounded-full bg-white border border-secondary-200 px-3 py-1 text-xs font-medium text-secondary-700 hover:bg-secondary-50 transition-colors"
               >
                 {c.patient.phone}
-                {c.chiefComplaint && <span className="text-purple-400">— {c.chiefComplaint.slice(0, 25)}</span>}
-                <span className="text-purple-500">Open →</span>
+                {c.chiefComplaint && <span className="text-secondary-400">— {c.chiefComplaint.slice(0, 25)}</span>}
+                <span className="text-secondary-500">Open →</span>
               </Link>
             ))}
           </div>
@@ -88,36 +88,36 @@ export default function DashboardPage() {
           label="Today's Revenue"
           value={revenue ? `₹${Number(revenue.totalRevenue).toLocaleString("en-IN")}` : "—"}
           sub={`${revenue?.invoiceCount ?? 0} invoices`}
-          color="blue"
+          color="primary"
         />
         <StatCard
           label="Today's Appointments"
           value={String(todayAppts.length)}
           sub={`${pendingAppts.length} pending · ${completedAppts.length} done`}
-          color="green"
+          color="success"
         />
         <StatCard
           label="GST Collected"
           value={revenue ? `₹${Number(revenue.gstCollected).toLocaleString("en-IN")}` : "—"}
           sub="Today"
-          color="purple"
+          color="secondary"
         />
         <StatCard
           label="Consultation Fees"
           value={revenue ? `₹${Number(revenue.consultationFees).toLocaleString("en-IN")}` : "—"}
           sub="Before GST"
-          color="orange"
+          color="accent"
         />
       </div>
 
       {/* Revenue sparkline */}
       {dailyRevenue && (
-        <div className="mb-8 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-8 cliniq-card-elevated p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-700">Revenue — Last 30 Days</h2>
+            <h2 className="text-sm font-semibold text-slate-700">Revenue — Last 30 Days</h2>
             {sparkTooltip && (
-              <span className="text-xs text-gray-500">
-                {sparkTooltip.date}: <span className="font-semibold text-gray-900">₹{sparkTooltip.amount.toLocaleString("en-IN")}</span>
+              <span className="text-xs text-slate-500">
+                {sparkTooltip.date}: <span className="font-semibold text-slate-900">₹{sparkTooltip.amount.toLocaleString("en-IN")}</span>
               </span>
             )}
           </div>
@@ -126,7 +126,7 @@ export default function DashboardPage() {
       )}
 
       {/* Quick actions */}
-      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Quick Actions</h2>
+      <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Quick Actions</h2>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 mb-8">
         <QuickAction href="/dashboard/appointments/new" label="Book Appointment" icon="📅" primary />
         <QuickAction href="/dashboard/patients/new" label="Register Patient" icon="👤" />
@@ -137,30 +137,32 @@ export default function DashboardPage() {
       {/* Today's upcoming appointments */}
       {pendingAppts.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Upcoming Today</h2>
+          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Upcoming Today</h2>
           <div className="space-y-2">
             {pendingAppts.slice(0, 5).map((appt) => (
               <Link
                 key={appt.id}
                 href={`/dashboard/appointments/${appt.id}`}
-                className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm hover:border-blue-300 transition-colors"
+                className="flex items-center justify-between cliniq-card px-4 py-3 hover:border-primary-300 transition-all duration-150"
               >
                 <div>
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-slate-900">
                     {new Date(appt.scheduledAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
-                    <span className="ml-2 text-xs text-gray-400 capitalize">{appt.type.replace("_", " ")}</span>
+                    <span className="ml-2 text-xs text-slate-400 capitalize">{appt.type.replace("_", " ")}</span>
                   </p>
-                  <p className="text-xs text-gray-500 mt-0.5 font-mono">{appt.patientId.slice(0, 8)}…</p>
+                  <p className="text-xs text-slate-500 mt-0.5 font-mono">{appt.patientId.slice(0, 8)}…</p>
                 </div>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  appt.status === "confirmed" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"
+                <span className={`cliniq-badge ${
+                  appt.status === "confirmed"
+                    ? "bg-primary-50 text-primary-700"
+                    : "bg-accent-100 text-accent-700"
                 }`}>
                   {appt.status}
                 </span>
               </Link>
             ))}
             {pendingAppts.length > 5 && (
-              <Link href="/dashboard/appointments" className="block text-center text-xs text-blue-600 hover:underline py-2">
+              <Link href="/dashboard/appointments" className="block text-center text-xs text-primary-600 hover:underline py-2">
                 View all {pendingAppts.length} appointments →
               </Link>
             )}
@@ -180,16 +182,16 @@ function greeting() {
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
   const colors: Record<string, string> = {
-    blue: "border-blue-100 bg-blue-50",
-    green: "border-green-100 bg-green-50",
-    purple: "border-purple-100 bg-purple-50",
-    orange: "border-orange-100 bg-orange-50",
+    primary: "border-primary-100 bg-primary-50",
+    success: "border-green-100 bg-green-50",
+    secondary: "border-secondary-100 bg-secondary-50",
+    accent: "border-accent-100 bg-accent-50",
   };
   return (
-    <div className={`rounded-xl border p-5 shadow-sm ${colors[color] ?? "border-gray-200 bg-white"}`}>
-      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</p>
-      <p className="mt-2 text-2xl font-bold text-gray-900">{value}</p>
-      <p className="mt-1 text-xs text-gray-400">{sub}</p>
+    <div className={`rounded-xl border p-5 shadow-xs ${colors[color] ?? "border-slate-200 bg-white"}`}>
+      <p className="text-2xs font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
+      <p className="mt-1 text-xs text-slate-400">{sub}</p>
     </div>
   );
 }
@@ -223,14 +225,14 @@ function RevenueSparkline({
               width={barW}
               height={barH}
               rx={2}
-              className={val > 0 ? "fill-blue-500 hover:fill-blue-600 cursor-pointer" : "fill-gray-100"}
+              className={val > 0 ? "fill-primary-500 hover:fill-primary-600 cursor-pointer transition-colors" : "fill-slate-100"}
               onMouseEnter={(e) => onHover({ date, amount: val, x: e.clientX })}
               onMouseLeave={() => onHover(null)}
             />
           );
         })}
       </svg>
-      <div className="mt-1 flex justify-between text-xs text-gray-400">
+      <div className="mt-1 flex justify-between text-2xs text-slate-400">
         <span>{entries[0]?.[0]?.slice(5)}</span>
         <span>{entries[entries.length - 1]?.[0]?.slice(5)}</span>
       </div>
@@ -242,12 +244,14 @@ function QuickAction({ href, label, icon, primary }: { href: string; label: stri
   return (
     <Link
       href={href}
-      className={`flex items-center gap-3 rounded-xl border px-4 py-3 shadow-sm hover:shadow-md transition-all ${
-        primary ? "border-blue-300 bg-blue-600 hover:bg-blue-700" : "border-gray-200 bg-white hover:border-blue-300"
+      className={`flex items-center gap-3 rounded-xl border px-4 py-3 shadow-xs hover:shadow-md transition-all duration-150 ${
+        primary
+          ? "border-primary-400 bg-gradient-primary hover:opacity-90"
+          : "border-slate-100 bg-white hover:border-primary-200"
       }`}
     >
       <span className="text-xl">{icon}</span>
-      <span className={`text-sm font-medium ${primary ? "text-white" : "text-gray-700"}`}>{label}</span>
+      <span className={`text-sm font-semibold ${primary ? "text-white" : "text-slate-700"}`}>{label}</span>
     </Link>
   );
 }

@@ -84,14 +84,14 @@ export default function BookAppointment() {
               onPress={() => setConsultationType('in-person')}
             >
               <Text style={{ fontSize: 24 }}>🏥</Text>
-              <Text style={[styles.typeLabel, consultationType === 'in-person' && { color: '#1d4ed8' }]}>In-Person</Text>
+              <Text style={[styles.typeLabel, consultationType === 'in-person' && { color: colors.primary[600] }]}>In-Person</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.typeOption, consultationType === 'video' && styles.typeOptionActive]}
               onPress={() => setConsultationType('video')}
             >
               <Text style={{ fontSize: 24 }}>📹</Text>
-              <Text style={[styles.typeLabel, consultationType === 'video' && { color: '#1d4ed8' }]}>Video Call</Text>
+              <Text style={[styles.typeLabel, consultationType === 'video' && { color: colors.primary[600] }]}>Video Call</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -106,9 +106,9 @@ export default function BookAppointment() {
                 style={[styles.dateCard, selectedDate === d.date && styles.dateCardActive]}
                 onPress={() => setSelectedDate(d.date)}
               >
-                <Text style={[styles.dateCardDay, selectedDate === d.date && { color: '#fff' }]}>{d.day}</Text>
-                <Text style={[styles.dateCardNum, selectedDate === d.date && { color: '#fff' }]}>{d.num}</Text>
-                <Text style={[styles.dateCardMonth, selectedDate === d.date && { color: '#dbeafe' }]}>{d.month}</Text>
+                <Text style={[styles.dateCardDay, selectedDate === d.date && { color: colors.white }]}>{d.day}</Text>
+                <Text style={[styles.dateCardNum, selectedDate === d.date && { color: colors.white }]}>{d.num}</Text>
+                <Text style={[styles.dateCardMonth, selectedDate === d.date && { color: colors.primary[100] }]}>{d.month}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -125,7 +125,7 @@ export default function BookAppointment() {
                   style={[styles.slotButton, selectedSlot === slot && styles.slotButtonActive]}
                   onPress={() => setSelectedSlot(slot)}
                 >
-                  <Text style={[styles.slotText, selectedSlot === slot && { color: '#fff' }]}>{slot}</Text>
+                  <Text style={[styles.slotText, selectedSlot === slot && { color: colors.white }]}>{slot}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -154,7 +154,7 @@ export default function BookAppointment() {
           placeholder="Search doctors or specialization..."
           value={search}
           onChangeText={setSearch}
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor=colors.text.disabled
         />
       </View>
 
@@ -174,11 +174,11 @@ export default function BookAppointment() {
               <Text style={styles.doctorSpec}>{doctor.specialization}</Text>
               <Text style={styles.clinicName}>{doctor.clinicName}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                <Text style={{ fontSize: 12, color: '#f59e0b' }}>★ {doctor.rating}</Text>
-                <Text style={{ fontSize: 12, color: '#10b981' }}>₹{doctor.fee}</Text>
+                <Text style={{ fontSize: 12, color: colors.warning.main }}>★ {doctor.rating}</Text>
+                <Text style={{ fontSize: 12, color: colors.success.main }}>₹{doctor.fee}</Text>
               </View>
             </View>
-            <Text style={{ color: '#3b82f6', fontWeight: '600', fontSize: 13 }}>Book →</Text>
+            <Text style={{ color: colors.info.main, fontWeight: '600', fontSize: 13 }}>Book →</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -188,43 +188,43 @@ export default function BookAppointment() {
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-      <Text style={{ color: '#6b7280', fontSize: 14 }}>{label}</Text>
-      <Text style={{ fontWeight: '600', fontSize: 14, color: '#1f2937' }}>{value}</Text>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.borderLight }}>
+      <Text style={{ color: colors.text.tertiary, fontSize: 14 }}>{label}</Text>
+      <Text style={{ fontWeight: '600', fontSize: 14, color: colors.text.secondary }}>{value}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  searchContainer: { padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  searchInput: { backgroundColor: '#f3f4f6', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, fontSize: 14 },
-  doctorCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', marginHorizontal: 16, marginTop: 8, padding: 16, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  searchContainer: { padding: 16, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  searchInput: { backgroundColor: colors.borderLight, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, fontSize: 14 },
+  doctorCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.white, marginHorizontal: 16, marginTop: 8, padding: 16, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
   doctorAvatar: { width: 48, height: 48, backgroundColor: '#eff6ff', borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  doctorName: { fontSize: 15, fontWeight: '600', color: '#1f2937' },
-  doctorSpec: { fontSize: 12, color: '#6b7280' },
-  clinicName: { fontSize: 11, color: '#9ca3af', marginTop: 2 },
-  selectedDoctorBar: { backgroundColor: '#1d4ed8', padding: 16 },
-  selectedDoctorName: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  doctorName: { fontSize: 15, fontWeight: '600', color: colors.text.secondary },
+  doctorSpec: { fontSize: 12, color: colors.text.tertiary },
+  clinicName: { fontSize: 11, color: colors.text.disabled, marginTop: 2 },
+  selectedDoctorBar: { backgroundColor: colors.primary[600], padding: 16 },
+  selectedDoctorName: { fontSize: 16, fontWeight: '600', color: colors.white },
   selectedDoctorSpec: { fontSize: 12, color: '#93c5fd' },
   section: { padding: 16 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#1f2937', marginBottom: 12 },
-  typeOption: { flex: 1, padding: 16, borderRadius: 12, borderWidth: 2, borderColor: '#e5e7eb', alignItems: 'center', gap: 8 },
-  typeOptionActive: { borderColor: '#1d4ed8', backgroundColor: '#eff6ff' },
-  typeLabel: { fontSize: 13, fontWeight: '600', color: '#6b7280' },
-  dateCard: { width: 64, padding: 12, borderRadius: 12, backgroundColor: '#fff', marginRight: 8, alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb' },
-  dateCardActive: { backgroundColor: '#1d4ed8', borderColor: '#1d4ed8' },
-  dateCardDay: { fontSize: 11, color: '#6b7280', fontWeight: '500' },
-  dateCardNum: { fontSize: 20, fontWeight: 'bold', color: '#1f2937', marginVertical: 2 },
-  dateCardMonth: { fontSize: 11, color: '#9ca3af' },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text.secondary, marginBottom: 12 },
+  typeOption: { flex: 1, padding: 16, borderRadius: 12, borderWidth: 2, borderColor: colors.border, alignItems: 'center', gap: 8 },
+  typeOptionActive: { borderColor: colors.primary[600], backgroundColor: '#eff6ff' },
+  typeLabel: { fontSize: 13, fontWeight: '600', color: colors.text.tertiary },
+  dateCard: { width: 64, padding: 12, borderRadius: 12, backgroundColor: colors.white, marginRight: 8, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  dateCardActive: { backgroundColor: colors.primary[600], borderColor: colors.primary[600] },
+  dateCardDay: { fontSize: 11, color: colors.text.tertiary, fontWeight: '500' },
+  dateCardNum: { fontSize: 20, fontWeight: 'bold', color: colors.text.secondary, marginVertical: 2 },
+  dateCardMonth: { fontSize: 11, color: colors.text.disabled },
   slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  slotButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb' },
-  slotButtonActive: { backgroundColor: '#1d4ed8', borderColor: '#1d4ed8' },
-  slotText: { fontSize: 13, color: '#374151', fontWeight: '500' },
-  primaryButton: { backgroundColor: '#1d4ed8', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
-  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  confirmCard: { margin: 24, backgroundColor: '#fff', borderRadius: 16, padding: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
-  confirmTitle: { fontSize: 22, fontWeight: 'bold', color: '#1f2937', textAlign: 'center' },
-  confirmSubtext: { fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 24 },
+  slotButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border },
+  slotButtonActive: { backgroundColor: colors.primary[600], borderColor: colors.primary[600] },
+  slotText: { fontSize: 13, color: colors.text.secondary, fontWeight: '500' },
+  primaryButton: { backgroundColor: colors.primary[600], paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  primaryButtonText: { color: colors.white, fontSize: 16, fontWeight: '600' },
+  confirmCard: { margin: 24, backgroundColor: colors.white, borderRadius: 16, padding: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
+  confirmTitle: { fontSize: 22, fontWeight: 'bold', color: colors.text.secondary, textAlign: 'center' },
+  confirmSubtext: { fontSize: 14, color: colors.text.tertiary, textAlign: 'center', marginBottom: 24 },
   confirmDetails: { marginBottom: 24 },
 });

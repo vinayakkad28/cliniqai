@@ -51,7 +51,7 @@ export default function MedicationsScreen() {
           <Text style={styles.reminderTitle}>Medication Reminders</Text>
           <Text style={styles.reminderSubtext}>Get notified when it's time</Text>
         </View>
-        <Switch value={remindersEnabled} onValueChange={setRemindersEnabled} trackColor={{ true: '#3b82f6' }} />
+        <Switch value={remindersEnabled} onValueChange={setRemindersEnabled} trackColor={{ true: colors.info.main }} />
       </View>
 
       {/* Today's Progress */}
@@ -79,8 +79,8 @@ export default function MedicationsScreen() {
               <Text style={styles.medName}>{med.name} {med.dose}</Text>
               <Text style={styles.medFreq}>{med.frequency}</Text>
             </View>
-            <View style={[styles.activeBadge, { backgroundColor: med.active ? '#dcfce7' : '#f3f4f6' }]}>
-              <Text style={[styles.activeText, { color: med.active ? '#16a34a' : '#9ca3af' }]}>
+            <View style={[styles.activeBadge, { backgroundColor: med.active ? colors.success.bg : colors.borderLight }]}>
+              <Text style={[styles.activeText, { color: med.active ? colors.success.text : colors.text.disabled }]}>
                 {med.active ? 'Active' : 'Completed'}
               </Text>
             </View>
@@ -100,7 +100,7 @@ export default function MedicationsScreen() {
                 <View key={i} style={styles.reminderRow}>
                   <Text style={styles.reminderTime}>{r.time}</Text>
                   <TouchableOpacity style={[styles.takenButton, r.taken && styles.takenButtonDone]}>
-                    <Text style={[styles.takenText, r.taken && { color: '#fff' }]}>
+                    <Text style={[styles.takenText, r.taken && { color: colors.white }]}>
                       {r.taken ? '✓ Taken' : 'Mark Taken'}
                     </Text>
                   </TouchableOpacity>
@@ -117,30 +117,30 @@ export default function MedicationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  reminderBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  reminderTitle: { fontSize: 15, fontWeight: '600', color: '#1f2937' },
-  reminderSubtext: { fontSize: 12, color: '#9ca3af' },
-  progressCard: { margin: 16, backgroundColor: '#1d4ed8', borderRadius: 12, padding: 16 },
-  progressTitle: { color: '#fff', fontWeight: '600', fontSize: 14, marginBottom: 8 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  reminderBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.white, padding: 16, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  reminderTitle: { fontSize: 15, fontWeight: '600', color: colors.text.secondary },
+  reminderSubtext: { fontSize: 12, color: colors.text.disabled },
+  progressCard: { margin: 16, backgroundColor: colors.primary[600], borderRadius: 12, padding: 16 },
+  progressTitle: { color: colors.white, fontWeight: '600', fontSize: 14, marginBottom: 8 },
   progressBar: { height: 8, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 4, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#fff', borderRadius: 4 },
+  progressFill: { height: '100%', backgroundColor: colors.white, borderRadius: 4 },
   progressText: { color: '#93c5fd', fontSize: 12, marginTop: 6 },
   filterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1f2937' },
-  filterLink: { color: '#3b82f6', fontSize: 13, fontWeight: '500' },
-  medCard: { backgroundColor: '#fff', marginHorizontal: 16, marginTop: 12, borderRadius: 12, padding: 16, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text.secondary },
+  filterLink: { color: colors.info.main, fontSize: 13, fontWeight: '500' },
+  medCard: { backgroundColor: colors.white, marginHorizontal: 16, marginTop: 12, borderRadius: 12, padding: 16, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
   medHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  medName: { fontSize: 16, fontWeight: '600', color: '#1f2937' },
-  medFreq: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  medName: { fontSize: 16, fontWeight: '600', color: colors.text.secondary },
+  medFreq: { fontSize: 12, color: colors.text.tertiary, marginTop: 2 },
   activeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   activeText: { fontSize: 11, fontWeight: '600' },
   medDetails: { flexDirection: 'row', gap: 12, marginTop: 8, flexWrap: 'wrap' },
-  medDetail: { fontSize: 11, color: '#9ca3af' },
-  reminderSection: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
+  medDetail: { fontSize: 11, color: colors.text.disabled },
+  reminderSection: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.borderLight },
   reminderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  reminderTime: { fontSize: 14, fontWeight: '500', color: '#374151' },
-  takenButton: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#d1d5db' },
-  takenButtonDone: { backgroundColor: '#10b981', borderColor: '#10b981' },
-  takenText: { fontSize: 12, fontWeight: '600', color: '#374151' },
+  reminderTime: { fontSize: 14, fontWeight: '500', color: colors.text.secondary },
+  takenButton: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
+  takenButtonDone: { backgroundColor: colors.success.main, borderColor: colors.success.main },
+  takenText: { fontSize: 12, fontWeight: '600', color: colors.text.secondary },
 });

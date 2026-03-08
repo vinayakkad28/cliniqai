@@ -8,10 +8,8 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { colors, shadow, radius } from "../../theme";
 
-const BLUE = "#1d4ed8";
-
-// Mock data — will be replaced by API calls
 const STATS = [
   { label: "Today's Patients", value: "24", trend: "+3" },
   { label: "Appointments", value: "18", trend: "2 left" },
@@ -43,25 +41,25 @@ function StatCard({ label, value, trend }: { label: string; value: string; trend
 }
 
 function AlertBadge({ severity }: { severity: string }) {
-  const colors: Record<string, string> = {
-    critical: "#dc2626",
-    warning: "#f59e0b",
-    info: "#3b82f6",
+  const badgeColors: Record<string, string> = {
+    critical: colors.critical.main,
+    warning: colors.warning.main,
+    info: colors.info.main,
   };
   return (
-    <View style={[styles.alertBadge, { backgroundColor: colors[severity] ?? "#6b7280" }]}>
+    <View style={[styles.alertBadge, { backgroundColor: badgeColors[severity] ?? colors.text.tertiary }]}>
       <Text style={styles.alertBadgeText}>{severity.toUpperCase()}</Text>
     </View>
   );
 }
 
 function StatusDot({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    "checked-in": "#16a34a",
-    waiting: "#f59e0b",
-    scheduled: "#9ca3af",
+  const dotColors: Record<string, string> = {
+    "checked-in": colors.status.checkedIn,
+    waiting: colors.status.waiting,
+    scheduled: colors.status.scheduled,
   };
-  return <View style={[styles.statusDot, { backgroundColor: colors[status] ?? "#9ca3af" }]} />;
+  return <View style={[styles.statusDot, { backgroundColor: dotColors[status] ?? colors.status.scheduled }]} />;
 }
 
 export default function DashboardScreen() {
@@ -75,18 +73,11 @@ export default function DashboardScreen() {
     return "Good Evening";
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    // TODO: refetch data from API
-    setTimeout(() => setRefreshing(false), 1000);
-  };
-
   return (
     <ScrollView
       style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BLUE} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); setTimeout(() => setRefreshing(false), 1000); }} tintColor={colors.primary[600]} />}
     >
-      {/* Greeting */}
       <View style={styles.greetingRow}>
         <View>
           <Text style={styles.greeting}>{greeting()}, Doctor</Text>
@@ -99,14 +90,10 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Stats Grid */}
       <View style={styles.statsGrid}>
-        {STATS.map((s) => (
-          <StatCard key={s.label} {...s} />
-        ))}
+        {STATS.map((s) => <StatCard key={s.label} {...s} />)}
       </View>
 
-      {/* Alerts */}
       {ALERTS.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Alerts</Text>
@@ -119,7 +106,6 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {/* Upcoming Appointments */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Upcoming</Text>
@@ -142,7 +128,6 @@ export default function DashboardScreen() {
         ))}
       </View>
 
-      {/* Quick Actions */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsRow}>
@@ -159,101 +144,41 @@ export default function DashboardScreen() {
           ))}
         </View>
       </View>
-
       <View style={{ height: 32 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f9fafb" },
-  greetingRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  greeting: { fontSize: 22, fontWeight: "700", color: "#111827" },
-  date: { fontSize: 13, color: "#6b7280", marginTop: 2 },
-  newPatientBtn: {
-    backgroundColor: BLUE,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  newPatientBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    paddingHorizontal: 12,
-    marginTop: 12,
-  },
-  statCard: {
-    width: "48%",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 14,
-    margin: "1%",
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  statValue: { fontSize: 24, fontWeight: "700", color: "#111827" },
-  statLabel: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-  statTrend: { fontSize: 11, color: "#16a34a", marginTop: 4, fontWeight: "500" },
+  container: { flex: 1, backgroundColor: colors.bg },
+  greetingRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  greeting: { fontSize: 22, fontWeight: "700", color: colors.text.primary },
+  date: { fontSize: 13, color: colors.text.tertiary, marginTop: 2 },
+  newPatientBtn: { backgroundColor: colors.primary[600], paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.md },
+  newPatientBtnText: { color: colors.white, fontSize: 13, fontWeight: "600" },
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 12, marginTop: 12 },
+  statCard: { width: "48%", backgroundColor: colors.surface, borderRadius: radius.lg, padding: 14, margin: "1%", ...shadow.sm },
+  statValue: { fontSize: 24, fontWeight: "700", color: colors.text.primary },
+  statLabel: { fontSize: 12, color: colors.text.tertiary, marginTop: 2 },
+  statTrend: { fontSize: 11, color: colors.success.text, marginTop: 4, fontWeight: "500" },
   section: { paddingHorizontal: 16, marginTop: 20 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  sectionTitle: { fontSize: 16, fontWeight: "700", color: "#111827", marginBottom: 10 },
-  seeAll: { fontSize: 13, color: BLUE, fontWeight: "600" },
-  alertRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    gap: 10,
-  },
-  alertBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  alertBadgeText: { color: "#fff", fontSize: 9, fontWeight: "700" },
-  alertText: { flex: 1, fontSize: 13, color: "#374151" },
-  apptCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    padding: 14,
-    borderRadius: 10,
-    marginBottom: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  },
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: colors.text.primary, marginBottom: 10 },
+  seeAll: { fontSize: 13, color: colors.primary[600], fontWeight: "600" },
+  alertRow: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, padding: 12, borderRadius: radius.md, marginBottom: 8, gap: 10 },
+  alertBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm },
+  alertBadgeText: { color: colors.white, fontSize: 9, fontWeight: "700" },
+  alertText: { flex: 1, fontSize: 13, color: colors.text.secondary },
+  apptCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, padding: 14, borderRadius: radius.lg, marginBottom: 8, ...shadow.sm },
   apptTimeCol: { alignItems: "center", width: 70 },
-  apptTime: { fontSize: 13, fontWeight: "600", color: "#374151" },
+  apptTime: { fontSize: 13, fontWeight: "600", color: colors.text.secondary },
   statusDot: { width: 8, height: 8, borderRadius: 4, marginTop: 4 },
   apptInfo: { flex: 1, marginLeft: 12 },
-  apptName: { fontSize: 15, fontWeight: "600", color: "#111827" },
-  apptType: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-  apptStatus: { fontSize: 11, color: "#6b7280", textTransform: "capitalize" },
+  apptName: { fontSize: 15, fontWeight: "600", color: colors.text.primary },
+  apptType: { fontSize: 12, color: colors.text.tertiary, marginTop: 2 },
+  apptStatus: { fontSize: 11, color: colors.text.tertiary, textTransform: "capitalize" },
   actionsRow: { flexDirection: "row", justifyContent: "space-between" },
-  actionBtn: {
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 14,
-    width: "23%",
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  },
+  actionBtn: { alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, padding: 14, width: "23%", ...shadow.sm },
   actionIcon: { fontSize: 24 },
-  actionLabel: { fontSize: 10, color: "#374151", fontWeight: "600", marginTop: 6, textAlign: "center" },
+  actionLabel: { fontSize: 10, color: colors.text.secondary, fontWeight: "600", marginTop: 6, textAlign: "center" },
 });
