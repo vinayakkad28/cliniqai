@@ -1,0 +1,85 @@
+# Staging environment - mirrors production with test data
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: cliniqai-staging-postgres
+    environment:
+      POSTGRES_DB: cliniqai_staging
+      POSTGRES_USER: cliniqai_staging
+      POSTGRES_PASSWORD: staging_password_change_me
+    ports:
+      - "5433:5432"
+    volumes:
+      - staging_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cliniqai_staging"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: cliniqai-staging-redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    container_name: cliniqai-staging-api
+    ports:
+      - "3011:3001"
+    environment:
+      - NODE_ENV=staging
+      - DATABASE_URL=postgresql://cliniqai_staging:staging_password_change_me@postgres:5432/cliniqai_staging
+      - REDIS_URL=redis://redis:6379
+      - AI_SERVICE_URL=http://ai:8001
+      - FHIR_SERVICE_URL=http://fhir:3002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  ai:
+    build:
+      context: .
+      dockerfile: services/ai/Dockerfile
+    container_name: cliniqai-staging-ai
+    ports:
+      - "8011:8001"
+    environment:
+      - ENVIRONMENT=staging
+      - GEMINI_BACKEND=gemini_api
+
+  fhir:
+    build:
+      context: .
+      dockerfile: services/fhir/Dockerfile
+    container_name: cliniqai-staging-fhir
+    ports:
+      - "3012:3002"
+    environment:
+      - NODE_ENV=staging
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: cliniqai-staging-web
+    ports:
+      - "3010:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3011/api
+      - NEXT_PUBLIC_AI_URL=http://localhost:8011
+
+volumes:
+  staging_postgres_data:

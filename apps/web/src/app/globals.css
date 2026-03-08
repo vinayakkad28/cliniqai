@@ -1,3 +1,147 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* Import Inter from Google Fonts via @import for simplicity */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    /* Primary: Medical Teal */
+    --color-primary: 23 133 144;
+    --color-primary-light: 31 165 171;
+    --color-primary-dark: 23 107 118;
+
+    /* Secondary: Warm Indigo */
+    --color-secondary: 99 102 241;
+
+    /* Accent: Warm Amber */
+    --color-accent: 245 158 11;
+
+    /* Surface */
+    --color-surface: 255 255 255;
+    --color-surface-secondary: 248 250 252;
+
+    /* Semantic */
+    --color-critical: 220 38 38;
+    --color-warning: 234 88 12;
+    --color-success: 22 163 74;
+    --color-info: 37 99 235;
+  }
+
+  body {
+    @apply bg-surface-secondary text-slate-900 antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  /* Smooth scrollbars for clinical data tables */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-300;
+  }
+}
+
+@layer components {
+  /* ── CliniqAI Component Classes ── */
+
+  /* Card with medical-grade clean look */
+  .cliniq-card {
+    @apply bg-white rounded-xl border border-slate-100 shadow-xs;
+  }
+
+  /* Elevated card for key information */
+  .cliniq-card-elevated {
+    @apply bg-white rounded-xl border border-slate-100 shadow-md;
+  }
+
+  /* Primary button */
+  .cliniq-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg
+           bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white
+           shadow-sm transition-all duration-150
+           hover:bg-primary-700 hover:shadow-md
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Secondary button */
+  .cliniq-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg
+           bg-white px-4 py-2.5 text-sm font-semibold text-slate-700
+           border border-slate-200 shadow-xs transition-all duration-150
+           hover:bg-slate-50 hover:border-slate-300
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* AI-powered feature badge/accent */
+  .cliniq-ai-badge {
+    @apply inline-flex items-center gap-1 rounded-full
+           bg-gradient-ai px-2.5 py-0.5 text-2xs font-semibold text-white;
+  }
+
+  /* Clinical severity badges */
+  .cliniq-severity-critical {
+    @apply bg-red-50 text-red-700 border border-red-200;
+  }
+  .cliniq-severity-high {
+    @apply bg-orange-50 text-orange-700 border border-orange-200;
+  }
+  .cliniq-severity-medium {
+    @apply bg-amber-50 text-amber-700 border border-amber-200;
+  }
+  .cliniq-severity-low {
+    @apply bg-blue-50 text-blue-700 border border-blue-200;
+  }
+
+  /* Stat card with teal accent */
+  .cliniq-stat {
+    @apply cliniq-card p-4;
+  }
+  .cliniq-stat-value {
+    @apply text-2xl font-bold text-slate-900;
+  }
+  .cliniq-stat-label {
+    @apply text-xs font-medium text-slate-500 mt-1;
+  }
+
+  /* Input with medical form styling */
+  .cliniq-input {
+    @apply w-full rounded-lg border border-slate-200 bg-white
+           px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400
+           transition-colors duration-150
+           focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100;
+  }
+
+  /* Badge for status indicators */
+  .cliniq-badge {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold;
+  }
+
+  /* Vitals display card */
+  .cliniq-vital {
+    @apply cliniq-card p-3 text-center;
+  }
+  .cliniq-vital-value {
+    @apply text-xl font-bold;
+  }
+  .cliniq-vital-label {
+    @apply text-2xs text-slate-500 mt-0.5;
+  }
+}
+
+@layer utilities {
+  /* Medical-grade focus ring */
+  .focus-ring-clinical {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2;
+  }
+}
