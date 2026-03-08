@@ -1,33 +1,9 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
-import prisma from '../lib/prisma';
+import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
-
-interface PrescriptionPayload {
-  prescriptionId: string;
-  doctorName: string;
-  doctorRegistration: string;
-  clinicName: string;
-  patientName: string;
-  patientAge: number;
-  patientGender: string;
-  date: string;
-  diagnosis: string;
-  medications: {
-    drug: string;
-    dose: string;
-    frequency: string;
-    duration: string;
-    route: string;
-    instructions?: string;
-  }[];
-  advice?: string;
-  followUpDate?: string;
-  signature: string;
-  qrData: string;
-}
 
 // Generate e-prescription with QR code data
 router.post('/:prescriptionId/generate', authenticate, async (req: Request, res: Response) => {
@@ -39,9 +15,7 @@ router.post('/:prescriptionId/generate', authenticate, async (req: Request, res:
       where: { id: prescriptionId },
       include: {
         patient: true,
-        doctor: {
-          include: { clinic: true },
-        },
+        doctor: true,
         consultation: true,
       },
     });
@@ -51,25 +25,19 @@ router.post('/:prescriptionId/generate', authenticate, async (req: Request, res:
       return;
     }
 
-    if (prescription.doctor_id !== doctorId) {
+    if (prescription.doctorId !== doctorId) {
       res.status(403).json({ error: 'Not authorized to access this prescription' });
       return;
     }
 
     // Build prescription payload
-    const payload: PrescriptionPayload = {
+    const payload = {
       prescriptionId: prescription.id,
-      doctorName: `Dr. ${prescription.doctor.first_name} ${prescription.doctor.last_name}`,
-      doctorRegistration: prescription.doctor.registration_number || '',
-      clinicName: prescription.doctor.clinic?.name || '',
-      patientName: `${prescription.patient.first_name} ${prescription.patient.last_name}`,
-      patientAge: calculateAge(prescription.patient.date_of_birth),
-      patientGender: prescription.patient.gender,
-      date: prescription.created_at.toISOString().split('T')[0],
-      diagnosis: prescription.consultation?.diagnosis || '',
-      medications: (prescription.medications as any[]) || [],
-      advice: prescription.advice || undefined,
-      followUpDate: prescription.follow_up_date?.toISOString().split('T')[0] || undefined,
+      doctorName: prescription.doctor.name,
+      clinicName: '',
+      patientPhone: prescription.patient.phone,
+      date: prescription.createdAt.toISOString().split('T')[0],
+      diagnosis: prescription.consultation?.chiefComplaint || '',
       signature: '',
       qrData: '',
     };
@@ -77,10 +45,9 @@ router.post('/:prescriptionId/generate', authenticate, async (req: Request, res:
     // Generate digital signature
     const signatureData = JSON.stringify({
       id: payload.prescriptionId,
-      doctor: payload.doctorRegistration,
-      patient: payload.patientName,
+      doctor: payload.doctorName,
+      patient: payload.patientPhone,
       date: payload.date,
-      medications: payload.medications.map((m) => m.drug),
     });
 
     const signature = crypto
@@ -92,11 +59,10 @@ router.post('/:prescriptionId/generate', authenticate, async (req: Request, res:
 
     // QR code data - compact verification payload
     const qrPayload = {
-      v: 1, // version
+      v: 1,
       id: prescription.id.slice(0, 12),
-      dr: payload.doctorRegistration,
+      dr: payload.doctorName,
       dt: payload.date,
-      rx: payload.medications.length,
       sig: signature.slice(0, 16),
       url: `${process.env.APP_URL || 'https://app.cliniqai.com'}/verify/${prescription.id}`,
     };
@@ -107,10 +73,10 @@ router.post('/:prescriptionId/generate', authenticate, async (req: Request, res:
     await prisma.prescription.update({
       where: { id: prescriptionId },
       data: {
-        digital_signature: signature,
-        qr_data: payload.qrData,
-        e_prescription_generated: true,
-        e_prescription_generated_at: new Date(),
+        digitalSignature: signature,
+        qrData: payload.qrData,
+        ePrescriptionGenerated: true,
+        ePrescriptionGeneratedAt: new Date(),
       },
     });
 
@@ -129,7 +95,7 @@ router.get('/verify/:prescriptionId', async (req: Request, res: Response) => {
     const prescription = await prisma.prescription.findUnique({
       where: { id: prescriptionId },
       include: {
-        doctor: { include: { clinic: true } },
+        doctor: true,
         patient: true,
       },
     });
@@ -139,7 +105,7 @@ router.get('/verify/:prescriptionId', async (req: Request, res: Response) => {
       return;
     }
 
-    if (!prescription.digital_signature) {
+    if (!prescription.digitalSignature) {
       res.status(400).json({ valid: false, error: 'Prescription not digitally signed' });
       return;
     }
@@ -147,10 +113,9 @@ router.get('/verify/:prescriptionId', async (req: Request, res: Response) => {
     // Re-compute signature to verify
     const signatureData = JSON.stringify({
       id: prescription.id,
-      doctor: prescription.doctor.registration_number || '',
-      patient: `${prescription.patient.first_name} ${prescription.patient.last_name}`,
-      date: prescription.created_at.toISOString().split('T')[0],
-      medications: ((prescription.medications as any[]) || []).map((m: any) => m.drug),
+      doctor: prescription.doctor.name,
+      patient: prescription.patient.phone,
+      date: prescription.createdAt.toISOString().split('T')[0],
     });
 
     const expectedSignature = crypto
@@ -158,20 +123,17 @@ router.get('/verify/:prescriptionId', async (req: Request, res: Response) => {
       .update(signatureData)
       .digest('hex');
 
-    const isValid = prescription.digital_signature === expectedSignature;
+    const isValid = prescription.digitalSignature === expectedSignature;
 
     res.json({
       valid: isValid,
       prescription: isValid
         ? {
             id: prescription.id,
-            doctor: `Dr. ${prescription.doctor.first_name} ${prescription.doctor.last_name}`,
-            registration: prescription.doctor.registration_number,
-            clinic: prescription.doctor.clinic?.name,
-            patient: `${prescription.patient.first_name} ${prescription.patient.last_name}`,
-            date: prescription.created_at.toISOString().split('T')[0],
-            medicationCount: ((prescription.medications as any[]) || []).length,
-            generatedAt: prescription.e_prescription_generated_at,
+            doctor: prescription.doctor.name,
+            patientPhone: prescription.patient.phone,
+            date: prescription.createdAt.toISOString().split('T')[0],
+            generatedAt: prescription.ePrescriptionGeneratedAt,
           }
         : null,
     });
@@ -181,14 +143,14 @@ router.get('/verify/:prescriptionId', async (req: Request, res: Response) => {
   }
 });
 
-// NMC-compliant prescription header
+// Prescription header
 router.get('/:prescriptionId/header', authenticate, async (req: Request, res: Response) => {
   try {
     const { prescriptionId } = req.params;
     const prescription = await prisma.prescription.findUnique({
       where: { id: prescriptionId },
       include: {
-        doctor: { include: { clinic: true } },
+        doctor: true,
         patient: true,
       },
     });
@@ -198,20 +160,12 @@ router.get('/:prescriptionId/header', authenticate, async (req: Request, res: Re
       return;
     }
 
-    // NMC format header
     const header = {
-      clinicName: prescription.doctor.clinic?.name || '',
-      clinicAddress: prescription.doctor.clinic?.address || '',
-      clinicPhone: prescription.doctor.clinic?.phone || '',
-      doctorName: `Dr. ${prescription.doctor.first_name} ${prescription.doctor.last_name}`,
-      doctorQualification: prescription.doctor.qualification || '',
-      doctorRegistration: prescription.doctor.registration_number || '',
-      doctorSpecialization: prescription.doctor.specialization || '',
-      patientName: `${prescription.patient.first_name} ${prescription.patient.last_name}`,
-      patientAge: calculateAge(prescription.patient.date_of_birth),
-      patientGender: prescription.patient.gender,
+      doctorName: prescription.doctor.name,
+      doctorSpecialties: prescription.doctor.specialties,
+      doctorLicense: prescription.doctor.licenseNumber,
       patientPhone: prescription.patient.phone,
-      prescriptionDate: prescription.created_at.toISOString().split('T')[0],
+      prescriptionDate: prescription.createdAt.toISOString().split('T')[0],
       prescriptionId: prescription.id,
     };
 
@@ -221,16 +175,5 @@ router.get('/:prescriptionId/header', authenticate, async (req: Request, res: Re
     res.status(500).json({ error: 'Failed to get prescription header' });
   }
 });
-
-function calculateAge(dob: Date | null): number {
-  if (!dob) return 0;
-  const today = new Date();
-  let age = today.getFullYear() - dob.getFullYear();
-  const monthDiff = today.getMonth() - dob.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
-    age--;
-  }
-  return age;
-}
 
 export default router;

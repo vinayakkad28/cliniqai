@@ -60,12 +60,12 @@ export default function VideoConsultationPage() {
   async function initializeCall() {
     try {
       // Get consultation details
-      const consultation = await api.consultations.get(token!, id as string);
-      setState((prev) => ({ ...prev, patientName: consultation.patient?.first_name + ' ' + consultation.patient?.last_name }));
+      const consultation = await api.consultations.get(id as string) as any;
+      setState((prev) => ({ ...prev, patientName: consultation.patient?.phone ?? 'Patient' }));
 
       // Create/get video room
-      const room = await api.telemedicine.createRoom(token!, id as string);
-      setState((prev) => ({ ...prev, roomUrl: room.url }));
+      const room = await api.telemedicine.createRoom(id as string);
+      setState((prev) => ({ ...prev, roomUrl: room.roomUrl }));
 
       // Get local media
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -169,7 +169,7 @@ export default function VideoConsultationPage() {
     // Save any notes
     if (notes.trim()) {
       try {
-        await api.consultations.updateNotes(token!, id as string, notes);
+        await api.consultations.update(id as string, { notes });
       } catch {
         // Notes save failed silently
       }

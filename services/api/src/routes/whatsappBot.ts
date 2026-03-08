@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import prisma from '../lib/prisma';
+import { prisma } from '../lib/prisma';
 import { smsReminderQueue, whatsappPrescriptionQueue } from '../lib/queues';
 
 const router = Router();
@@ -7,7 +7,7 @@ const router = Router();
 // MSG91 webhook - incoming WhatsApp messages
 router.post('/webhook', async (req: Request, res: Response) => {
   try {
-    const { from, body, type } = req.body;
+    const { from, body } = req.body;
 
     // Normalize phone number
     const phone = from.startsWith('+') ? from : `+${from}`;
@@ -16,7 +16,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
     // Find patient by phone
     const patient = await prisma.patient.findFirst({
       where: { phone },
-      include: { appointments: { orderBy: { scheduled_at: 'desc' }, take: 5 } },
+      include: { appointments: { orderBy: { scheduledAt: 'desc' }, take: 5 } },
     });
 
     let reply = '';
@@ -29,7 +29,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
     // Command routing
     if (message === 'hi' || message === 'hello' || message === 'menu') {
-      reply = getMainMenu(patient.first_name);
+      reply = getMainMenu(patient.phone);
     } else if (message === '1' || message === 'book') {
       reply = await handleBookAppointment(patient);
     } else if (message === '2' || message === 'appointments' || message === 'my appointments') {
@@ -39,9 +39,9 @@ router.post('/webhook', async (req: Request, res: Response) => {
     } else if (message === '4' || message === 'reports' || message === 'lab') {
       reply = await handleGetReports(patient);
     } else if (message === '5' || message === 'reminder') {
-      reply = await handleSetReminder(patient);
+      reply = handleSetReminder();
     } else if (message.startsWith('confirm')) {
-      reply = await handleConfirmAppointment(patient, message);
+      reply = handleConfirmAppointment(message);
     } else if (message.startsWith('cancel')) {
       reply = await handleCancelAppointment(patient, message);
     } else if (message.startsWith('register')) {
@@ -60,13 +60,13 @@ router.post('/webhook', async (req: Request, res: Response) => {
 // Get patient's upcoming appointments via WhatsApp
 router.get('/patient/:phone/status', async (req: Request, res: Response) => {
   try {
-    const phone = decodeURIComponent(req.params.phone);
+    const phone = decodeURIComponent(req.params.phone ?? '');
     const patient = await prisma.patient.findFirst({
       where: { phone },
       include: {
         appointments: {
           where: { status: { in: ['scheduled', 'confirmed'] } },
-          orderBy: { scheduled_at: 'asc' },
+          orderBy: { scheduledAt: 'asc' },
           take: 3,
         },
       },
@@ -78,7 +78,7 @@ router.get('/patient/:phone/status', async (req: Request, res: Response) => {
     }
 
     res.json({
-      patient: { name: `${patient.first_name} ${patient.last_name}` },
+      patient: { phone: patient.phone },
       appointments: patient.appointments,
     });
   } catch (error) {
@@ -99,9 +99,8 @@ router.post('/reminders/send', async (req: Request, res: Response) => {
 
     const upcomingAppointments = await prisma.appointment.findMany({
       where: {
-        scheduled_at: { gte: tomorrow, lt: dayAfter },
+        scheduledAt: { gte: tomorrow, lt: dayAfter },
         status: { in: ['scheduled', 'confirmed'] },
-        reminder_sent: false,
       },
       include: { patient: true, doctor: true },
     });
@@ -112,11 +111,7 @@ router.post('/reminders/send', async (req: Request, res: Response) => {
         await smsReminderQueue.add('appointment-reminder', {
           appointmentId: apt.id,
           patientPhone: apt.patient.phone,
-          scheduledAt: apt.scheduled_at.toISOString(),
-        });
-        await prisma.appointment.update({
-          where: { id: apt.id },
-          data: { reminder_sent: true },
+          scheduledAt: apt.scheduledAt.toISOString(),
         });
         sent++;
       }
@@ -134,9 +129,7 @@ function getMainMenu(name: string): string {
 }
 
 async function handleBookAppointment(patient: any): Promise<string> {
-  // Get doctor's available slots
   const doctors = await prisma.doctor.findMany({
-    where: { clinic_id: patient.clinic_id },
     take: 5,
   });
 
@@ -146,8 +139,8 @@ async function handleBookAppointment(patient: any): Promise<string> {
 
   let reply = `📅 *Book an Appointment*\n\nAvailable doctors:\n`;
   doctors.forEach((doc: any, i: number) => {
-    reply += `\n*${i + 1}.* Dr. ${doc.first_name} ${doc.last_name}`;
-    if (doc.specialization) reply += ` (${doc.specialization})`;
+    reply += `\n*${i + 1}.* ${doc.name}`;
+    if (doc.specialties?.length) reply += ` (${doc.specialties.join(', ')})`;
   });
 
   reply += `\n\nReply with *CONFIRM <doctor number>* to book the next available slot.`;
@@ -157,10 +150,10 @@ async function handleBookAppointment(patient: any): Promise<string> {
 async function handleViewAppointments(patient: any): Promise<string> {
   const appointments = await prisma.appointment.findMany({
     where: {
-      patient_id: patient.id,
+      patientId: patient.id,
       status: { in: ['scheduled', 'confirmed'] },
     },
-    orderBy: { scheduled_at: 'asc' },
+    orderBy: { scheduledAt: 'asc' },
     take: 5,
     include: { doctor: true },
   });
@@ -171,7 +164,7 @@ async function handleViewAppointments(patient: any): Promise<string> {
 
   let reply = '📋 *Your Upcoming Appointments:*\n';
   appointments.forEach((apt: any, i: number) => {
-    const date = new Date(apt.scheduled_at).toLocaleDateString('en-IN', {
+    const date = new Date(apt.scheduledAt).toLocaleDateString('en-IN', {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
@@ -179,7 +172,7 @@ async function handleViewAppointments(patient: any): Promise<string> {
       minute: '2-digit',
     });
     reply += `\n*${i + 1}.* ${date}`;
-    if (apt.doctor) reply += `\n   Dr. ${apt.doctor.first_name} ${apt.doctor.last_name}`;
+    if (apt.doctor) reply += `\n   ${apt.doctor.name}`;
     reply += `\n   Status: ${apt.status}`;
     reply += `\n   Reply *CANCEL ${apt.id.slice(0, 8)}* to cancel\n`;
   });
@@ -189,8 +182,8 @@ async function handleViewAppointments(patient: any): Promise<string> {
 
 async function handleGetPrescription(patient: any): Promise<string> {
   const prescriptions = await prisma.prescription.findMany({
-    where: { patient_id: patient.id },
-    orderBy: { created_at: 'desc' },
+    where: { patientId: patient.id },
+    orderBy: { createdAt: 'desc' },
     take: 3,
     include: { doctor: true },
   });
@@ -201,13 +194,13 @@ async function handleGetPrescription(patient: any): Promise<string> {
 
   let reply = '💊 *Your Recent Prescriptions:*\n';
   prescriptions.forEach((rx: any, i: number) => {
-    const date = new Date(rx.created_at).toLocaleDateString('en-IN', {
+    const date = new Date(rx.createdAt).toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
     });
     reply += `\n*${i + 1}.* ${date}`;
-    if (rx.doctor) reply += ` - Dr. ${rx.doctor.first_name}`;
+    if (rx.doctor) reply += ` - ${rx.doctor.name}`;
     reply += `\n   ID: ${rx.id.slice(0, 8)}`;
   });
 
@@ -219,7 +212,7 @@ async function handleGetPrescription(patient: any): Promise<string> {
       phone: patient.phone,
       templateName: 'prescription_share',
       variables: { prescriptionId: prescriptions[0].id },
-      mediaUrl: '', // PDF URL will be generated by worker
+      mediaUrl: '',
     });
   }
 
@@ -228,8 +221,8 @@ async function handleGetPrescription(patient: any): Promise<string> {
 
 async function handleGetReports(patient: any): Promise<string> {
   const labOrders = await prisma.labOrder.findMany({
-    where: { patient_id: patient.id, status: 'completed' },
-    orderBy: { created_at: 'desc' },
+    where: { patientId: patient.id, status: 'completed' },
+    orderBy: { createdAt: 'desc' },
     take: 5,
   });
 
@@ -239,23 +232,23 @@ async function handleGetReports(patient: any): Promise<string> {
 
   let reply = '🔬 *Your Lab Reports:*\n';
   labOrders.forEach((lab: any, i: number) => {
-    const date = new Date(lab.created_at).toLocaleDateString('en-IN', {
+    const date = new Date(lab.createdAt).toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
     });
-    reply += `\n*${i + 1}.* ${lab.test_name || 'Lab Test'} - ${date}`;
+    reply += `\n*${i + 1}.* Lab Test - ${date}`;
     reply += `\n   Status: ${lab.status}`;
   });
 
   return reply;
 }
 
-async function handleSetReminder(patient: any): Promise<string> {
+function handleSetReminder(): string {
   return `⏰ *Medication Reminders*\n\nI'll remind you to take your medicines on time.\n\nReminder times:\n• Morning: 8:00 AM\n• Afternoon: 1:00 PM\n• Evening: 7:00 PM\n• Night: 10:00 PM\n\nYour reminders are now active! I'll send you a WhatsApp message at each scheduled time based on your current prescription.\n\nReply *STOP REMINDER* to disable.`;
 }
 
-async function handleConfirmAppointment(patient: any, message: string): Promise<string> {
+function handleConfirmAppointment(message: string): string {
   const parts = message.split(' ');
   if (parts.length < 2) {
     return 'Please reply with *CONFIRM <doctor number>* to book.';
@@ -273,7 +266,7 @@ async function handleCancelAppointment(patient: any, message: string): Promise<s
   const aptIdPrefix = parts[1];
   const appointment = await prisma.appointment.findFirst({
     where: {
-      patient_id: patient.id,
+      patientId: patient.id,
       id: { startsWith: aptIdPrefix },
       status: { in: ['scheduled', 'confirmed'] },
     },

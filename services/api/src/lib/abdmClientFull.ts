@@ -24,9 +24,9 @@ async function getAccessToken(): Promise<string> {
 
   if (!res.ok) throw new Error(`ABDM auth failed: ${res.status}`);
 
-  const data = await res.json();
+  const data = (await res.json()) as { accessToken: string; expiresIn?: number };
   accessToken = data.accessToken;
-  tokenExpiry = Date.now() + (data.expiresIn || 1800) * 1000;
+  tokenExpiry = Date.now() + (data.expiresIn ?? 1800) * 1000;
   return accessToken;
 }
 

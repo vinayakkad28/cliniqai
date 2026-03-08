@@ -33,6 +33,7 @@ export default function EPrescriptionPage() {
   const { id } = useParams();
   const { token } = useAuth();
   const router = useRouter();
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
   const printRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<EPrescriptionData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,14 +46,15 @@ export default function EPrescriptionPage() {
   async function generatePrescription() {
     try {
       // First get the consultation to find the prescription
-      const consultation = await api.consultations.get(token!, id as string);
-      if (!consultation.prescription_id) {
+      const consultation = await api.consultations.get(id as string) as any;
+      const prescriptionId = consultation.prescription_id ?? consultation.prescriptions?.[0]?.id;
+      if (!prescriptionId) {
         setError('No prescription found for this consultation. Create a prescription first.');
         setLoading(false);
         return;
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/e-prescription/${consultation.prescription_id}/generate`, {
+      const res = await fetch(`${apiUrl}/e-prescription/${prescriptionId}/generate`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -77,7 +79,7 @@ export default function EPrescriptionPage() {
   async function handleShareWhatsApp() {
     if (!data) return;
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/prescriptions/${data.prescriptionId}/send`, {
+      await fetch(`${apiUrl}/prescriptions/${data.prescriptionId}/send`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
