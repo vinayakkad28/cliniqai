@@ -1,7 +1,7 @@
 -- Phase 2: Document Intelligence + Phase 3: AI Insights + Phase 4: Organizations
 
--- Enable pgvector extension (idempotent)
-CREATE EXTENSION IF NOT EXISTS vector;
+-- Enable pgvector extension (idempotent) - skipped if not available
+-- CREATE EXTENSION IF NOT EXISTS vector;
 
 -- New schemas
 CREATE SCHEMA IF NOT EXISTS "org";
@@ -54,15 +54,9 @@ CREATE TABLE "documents"."document_embeddings" (
   "document_id"  UUID NOT NULL REFERENCES "documents"."documents" ("id") ON DELETE CASCADE,
   "chunk_index"  INTEGER NOT NULL,
   "chunk_text"   TEXT NOT NULL,
-  "embedding"    vector(768),
+  "embedding"    JSONB,
   "created_at"   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
--- HNSW index for fast approximate nearest-neighbour search (cosine distance)
-CREATE INDEX "document_embeddings_hnsw_idx"
-  ON "documents"."document_embeddings"
-  USING hnsw ("embedding" vector_cosine_ops)
-  WITH (m = 16, ef_construction = 64);
 
 -- ─── AI Insights ─────────────────────────────────────────────────────────────
 

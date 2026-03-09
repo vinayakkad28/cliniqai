@@ -7,7 +7,7 @@ datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
   schemas    = ["auth", "clinic", "patients", "appointments", "consultations", "prescriptions", "billing", "pharmacy", "labs", "documents", "ai", "org", "abdm"]
-  extensions = [pgvector(map: "vector", schema: "public")]
+  // extensions = [pgvector(map: "vector", schema: "public")]
 }
 
 // ─────────────────────────────────────────
@@ -553,7 +553,7 @@ model DocumentEmbedding {
   documentId  String                      @map("document_id")
   chunkIndex  Int                         @map("chunk_index")
   chunkText   String                      @map("chunk_text")
-  embedding   Unsupported("vector(768)")?
+  embedding   Json?
   createdAt   DateTime                    @default(now()) @map("created_at")
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
