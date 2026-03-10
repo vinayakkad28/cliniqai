@@ -7,6 +7,7 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken, ROLE_SCOPES } fr
 import { generateOtp, hashOtp, verifyOtp, otpExpiresAt } from "../lib/otp.js";
 import { sendOtpSms } from "../lib/msg91.js";
 import { authenticate } from "../middleware/auth.js";
+import { asyncHandler } from "../lib/asyncHandler.js";
 
 export const authRouter = Router();
 
@@ -55,7 +56,7 @@ async function issueTokenPair(userId: string, role: string, clinicId?: string) {
 
 // ─── POST /api/auth/register ─────────────────────────────────────────────────
 
-authRouter.post("/register", async (req, res) => {
+authRouter.post("/register", asyncHandler(async (req, res) => {
   const result = RegisterSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -63,6 +64,13 @@ authRouter.post("/register", async (req, res) => {
   }
 
   const { phone, name, licenseNumber, email, password } = result.data;
+
+  // Rate limit check
+  const rateLimitError = checkOtpRateLimit(phone);
+  if (rateLimitError) {
+    res.status(429).json({ error: rateLimitError });
+    return;
+  }
 
   const existing = await prisma.user.findUnique({ where: { phone } });
   if (existing) {
@@ -92,11 +100,41 @@ authRouter.post("/register", async (req, res) => {
     userId: user.id,
     ...(devOtp ? { dev_otp: devOtp } : {}),
   });
-});
+}));
+
+// ─── OTP rate limiting (in-memory, per phone) ──────────────────────────────
+
+const otpRateLimit = new Map<string, { count: number; resetAt: number }>();
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const OTP_COOLDOWN_MS = 30 * 1000; // 30 seconds between sends
+const otpLastSent = new Map<string, number>();
+
+function checkOtpRateLimit(phone: string): string | null {
+  const now = Date.now();
+  // Check cooldown (30s between sends)
+  const lastSent = otpLastSent.get(phone);
+  if (lastSent && now - lastSent < OTP_COOLDOWN_MS) {
+    const waitSec = Math.ceil((OTP_COOLDOWN_MS - (now - lastSent)) / 1000);
+    return `Please wait ${waitSec} seconds before requesting another OTP`;
+  }
+  // Check rate limit (5 per 10 minutes)
+  const entry = otpRateLimit.get(phone);
+  if (entry && now < entry.resetAt) {
+    if (entry.count >= OTP_MAX_ATTEMPTS) {
+      return "Too many OTP requests. Please try again later.";
+    }
+    entry.count++;
+  } else {
+    otpRateLimit.set(phone, { count: 1, resetAt: now + OTP_WINDOW_MS });
+  }
+  otpLastSent.set(phone, now);
+  return null;
+}
 
 // ─── POST /api/auth/send-otp ─────────────────────────────────────────────────
 
-authRouter.post("/send-otp", async (req, res) => {
+authRouter.post("/send-otp", asyncHandler(async (req, res) => {
   const result = z.object({ phone: z.string().min(10) }).safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -104,6 +142,14 @@ authRouter.post("/send-otp", async (req, res) => {
   }
 
   const { phone } = result.data;
+
+  // Rate limit check
+  const rateLimitError = checkOtpRateLimit(phone);
+  if (rateLimitError) {
+    res.status(429).json({ error: rateLimitError });
+    return;
+  }
+
   const user = await prisma.user.findUnique({ where: { phone } });
   if (!user) {
     res.status(404).json({ error: "No account found for this number" });
@@ -118,11 +164,11 @@ authRouter.post("/send-otp", async (req, res) => {
   const devOtp = await sendOtpSms({ phone, otp, templateId: process.env["MSG91_TEMPLATE_OTP"] ?? "" });
 
   res.json({ message: "OTP sent", ...(devOtp ? { dev_otp: devOtp } : {}) });
-});
+}));
 
 // ─── POST /api/auth/verify-otp ───────────────────────────────────────────────
 
-authRouter.post("/verify-otp", async (req, res) => {
+authRouter.post("/verify-otp", asyncHandler(async (req, res) => {
   const result = VerifyOtpSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -157,11 +203,11 @@ authRouter.post("/verify-otp", async (req, res) => {
 
   const { accessToken, refreshToken } = await issueTokenPair(user.id, user.role);
   res.json({ accessToken, refreshToken, role: user.role, userId: user.id });
-});
+}));
 
 // ─── POST /api/auth/login ─────────────────────────────────────────────────────
 
-authRouter.post("/login", async (req, res) => {
+authRouter.post("/login", asyncHandler(async (req, res) => {
   const result = LoginSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -184,11 +230,11 @@ authRouter.post("/login", async (req, res) => {
 
   const { accessToken, refreshToken } = await issueTokenPair(user.id, user.role);
   res.json({ accessToken, refreshToken, role: user.role, userId: user.id });
-});
+}));
 
 // ─── POST /api/auth/refresh ───────────────────────────────────────────────────
 
-authRouter.post("/refresh", async (req, res) => {
+authRouter.post("/refresh", asyncHandler(async (req, res) => {
   const result = RefreshSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -223,11 +269,11 @@ authRouter.post("/refresh", async (req, res) => {
   await prisma.refreshToken.delete({ where: { id: stored.id } });
   const { accessToken, refreshToken } = await issueTokenPair(user.id, user.role);
   res.json({ accessToken, refreshToken });
-});
+}));
 
 // ─── POST /api/auth/logout ────────────────────────────────────────────────────
 
-authRouter.post("/logout", authenticate, async (req, res) => {
+authRouter.post("/logout", authenticate, asyncHandler(async (req, res) => {
   const { refreshToken } = req.body as { refreshToken?: string };
 
   if (refreshToken) {
@@ -238,11 +284,11 @@ authRouter.post("/logout", authenticate, async (req, res) => {
   }
 
   res.json({ message: "Logged out" });
-});
+}));
 
 // ─── GET /api/auth/me ─────────────────────────────────────────────────────────
 
-authRouter.get("/me", authenticate, async (req, res) => {
+authRouter.get("/me", authenticate, asyncHandler(async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.sub },
     select: {
@@ -263,4 +309,4 @@ authRouter.get("/me", authenticate, async (req, res) => {
   }
 
   res.json(user);
-});
+}));

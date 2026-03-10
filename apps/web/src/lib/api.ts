@@ -58,6 +58,9 @@ export const auth = {
   refresh: (refreshToken: string) =>
     request<Pick<AuthTokens, "accessToken" | "refreshToken">>("POST", "/auth/refresh", { refreshToken }),
 
+  register: (data: { phone: string; name: string; licenseNumber: string; email?: string }) =>
+    request<{ message: string; userId: string; dev_otp?: string }>("POST", "/auth/register", data),
+
   logout: (refreshToken?: string) =>
     request<{ message: string }>("POST", "/auth/logout", refreshToken ? { refreshToken } : {}),
 
@@ -120,6 +123,7 @@ export interface MedicalHistory {
 export interface Patient {
   id: string;
   phone: string;
+  name?: string | null;
   fhirPatientId: string;
   tags: { tag: string }[];
   createdAt: string;
@@ -160,6 +164,7 @@ export interface Appointment {
   status: string;
   type: string;
   notes: string | null;
+  patient?: { id: string; phone: string; name?: string | null };
 }
 
 export interface AppointmentListResponse {

@@ -64,7 +64,7 @@ export default function PatientsPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  {["Phone", "Tags", "Registered", "Actions"].map((h) => (
+                  {["Name", "Phone", "Tags", "Registered", "Actions"].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
                       {h}
                     </th>
@@ -74,7 +74,8 @@ export default function PatientsPage() {
               <tbody className="divide-y divide-gray-100">
                 {data.data.map((pt) => (
                   <tr key={pt.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{pt.phone}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{pt.name || "—"}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{pt.phone}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {pt.tags.map(({ tag }) => (

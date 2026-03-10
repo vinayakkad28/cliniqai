@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { authenticate } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
+import { asyncHandler } from "../lib/asyncHandler.js";
 
 export const followupsRouter = Router();
 
@@ -68,7 +69,7 @@ function matchDiagnosisRule(diagnosis: string): { days: number; reason: string }
 
 // ─── POST /api/followups ────────────────────────────────────────────────────
 
-followupsRouter.post("/", async (req: Request, res: Response) => {
+followupsRouter.post("/", asyncHandler(async (req: Request, res: Response) => {
   const result = CreateFollowupSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -99,11 +100,11 @@ followupsRouter.post("/", async (req: Request, res: Response) => {
   });
 
   res.status(201).json(followup);
-});
+}));
 
 // ─── GET /api/followups ─────────────────────────────────────────────────────
 
-followupsRouter.get("/", async (req: Request, res: Response) => {
+followupsRouter.get("/", asyncHandler(async (req: Request, res: Response) => {
   const query = ListQuerySchema.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: query.error.flatten() });
@@ -116,8 +117,8 @@ followupsRouter.get("/", async (req: Request, res: Response) => {
   const dateFilter = (from || to)
     ? {
         scheduledDate: {
-          ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
-          ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+          ...(from ? { gte: new Date(`${from}T00:00:00.000+05:30`) } : {}),
+          ...(to ? { lte: new Date(`${to}T23:59:59.999+05:30`) } : {}),
         },
       }
     : {};
@@ -146,11 +147,11 @@ followupsRouter.get("/", async (req: Request, res: Response) => {
     data: followups,
     meta: { total, page, limit, pages: Math.ceil(total / limit) },
   });
-});
+}));
 
 // ─── GET /api/followups/due ─────────────────────────────────────────────────
 
-followupsRouter.get("/due", async (req: Request, res: Response) => {
+followupsRouter.get("/due", asyncHandler(async (req: Request, res: Response) => {
   const rangeParam = (req.query["range"] as string) || "today";
 
   const now = new Date();
@@ -182,11 +183,11 @@ followupsRouter.get("/due", async (req: Request, res: Response) => {
   });
 
   res.json({ data: followups, meta: { total: followups.length, range: rangeParam } });
-});
+}));
 
 // ─── POST /api/followups/auto-generate ──────────────────────────────────────
 
-followupsRouter.post("/auto-generate", async (req: Request, res: Response) => {
+followupsRouter.post("/auto-generate", asyncHandler(async (req: Request, res: Response) => {
   const result = AutoGenerateSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -255,11 +256,11 @@ followupsRouter.post("/auto-generate", async (req: Request, res: Response) => {
     message: `Follow-up scheduled in ${rule.days} days based on diagnosis: ${diagnosis}`,
     created: followup,
   });
-});
+}));
 
 // ─── PATCH /api/followups/:id ───────────────────────────────────────────────
 
-followupsRouter.patch("/:id", async (req: Request, res: Response) => {
+followupsRouter.patch("/:id", asyncHandler(async (req: Request, res: Response) => {
   const result = UpdateFollowupSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -286,11 +287,11 @@ followupsRouter.patch("/:id", async (req: Request, res: Response) => {
   });
 
   res.json(updated);
-});
+}));
 
 // ─── DELETE /api/followups/:id ──────────────────────────────────────────────
 
-followupsRouter.delete("/:id", async (req: Request, res: Response) => {
+followupsRouter.delete("/:id", asyncHandler(async (req: Request, res: Response) => {
   const followup = await prisma.followup.findUnique({ where: { id: req.params["id"] } });
   if (!followup) {
     res.status(404).json({ error: "Follow-up not found" });
@@ -308,4 +309,4 @@ followupsRouter.delete("/:id", async (req: Request, res: Response) => {
   });
 
   res.json({ message: "Follow-up cancelled" });
-});
+}));

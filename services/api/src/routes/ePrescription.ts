@@ -22,8 +22,8 @@ function generateQRCodeSVG(data: string, size = 200): string {
     matrix[row] = [];
     for (let col = 0; col < modules; col++) {
       const idx = (row * modules + col) % hash.length;
-      const val = parseInt(hash[idx], 16);
-      matrix[row][col] = val >= 8; // threshold at midpoint
+      const val = parseInt(hash[idx]!, 16);
+      matrix[row]![col] = val >= 8; // threshold at midpoint
     }
   }
 
@@ -36,7 +36,7 @@ function generateQRCodeSVG(data: string, size = 200): string {
   let rects = '';
   for (let row = 0; row < modules; row++) {
     for (let col = 0; col < modules; col++) {
-      if (matrix[row][col]) {
+      if (matrix[row]![col]) {
         rects += `<rect x="${col * cellSize}" y="${row * cellSize}" width="${cellSize}" height="${cellSize}" fill="#000"/>`;
       }
     }
@@ -54,7 +54,7 @@ function addFinderPattern(matrix: boolean[][], startRow: number, startCol: numbe
     for (let c = 0; c < 7; c++) {
       const isOuter = r === 0 || r === 6 || c === 0 || c === 6;
       const isInner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
-      matrix[startRow + r][startCol + c] = isOuter || isInner;
+      matrix[startRow + r]![startCol + c] = isOuter || isInner;
     }
   }
 }
@@ -88,7 +88,7 @@ function verifyDigitalSignature(payload: Record<string, unknown>, signature: str
 router.post('/:prescriptionId/generate', authenticate, async (req: Request, res: Response) => {
   try {
     const { prescriptionId } = req.params;
-    const doctorId = (req as any).auth.doctor_id;
+    const doctorId = req.user!.doctor_id;
 
     const prescription = await prisma.prescription.findUnique({
       where: { id: prescriptionId },
@@ -331,7 +331,7 @@ router.get('/verify/code/:code', async (req: Request, res: Response) => {
 router.post('/:prescriptionId/share/whatsapp', authenticate, async (req: Request, res: Response) => {
   try {
     const { prescriptionId } = req.params;
-    const doctorId = (req as any).auth.doctor_id;
+    const doctorId = req.user!.doctor_id;
     const { recipientPhone } = req.body;
 
     const prescription = await prisma.prescription.findUnique({

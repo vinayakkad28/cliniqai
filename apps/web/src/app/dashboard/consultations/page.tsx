@@ -11,7 +11,7 @@ interface ConsultationItem {
   endedAt?: string;
   chiefComplaint?: string;
   status: string;
-  patient: { id: string; phone: string };
+  patient: { id: string; phone: string; name?: string | null };
   prescriptions: { id: string }[];
   labOrders: { id: string }[];
   invoices: { id: string; status: string; total: string }[];
@@ -84,7 +84,7 @@ export default function ConsultationsPage() {
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <Link href={`/dashboard/patients/${c.patientId}`} className="text-blue-600 hover:underline font-medium">
-                        {c.patient.phone}
+                        {c.patient.name || c.patient.phone}
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">

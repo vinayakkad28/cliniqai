@@ -19,7 +19,7 @@ interface ConsultationItem {
   status: string;
   chiefComplaint?: string;
   startedAt: string;
-  patient: { id: string; phone: string };
+  patient: { id: string; phone: string; name?: string | null };
 }
 
 export default function DashboardPage() {
@@ -73,7 +73,7 @@ export default function DashboardPage() {
                 href={`/dashboard/consultations/${c.id}`}
                 className="inline-flex items-center gap-1.5 rounded-full bg-white border border-secondary-200 px-3 py-1 text-xs font-medium text-secondary-700 hover:bg-secondary-50 transition-colors"
               >
-                {c.patient.phone}
+                {c.patient.name || c.patient.phone}
                 {c.chiefComplaint && <span className="text-secondary-400">— {c.chiefComplaint.slice(0, 25)}</span>}
                 <span className="text-secondary-500">Open →</span>
               </Link>
@@ -150,7 +150,7 @@ export default function DashboardPage() {
                     {new Date(appt.scheduledAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                     <span className="ml-2 text-xs text-slate-400 capitalize">{appt.type.replace("_", " ")}</span>
                   </p>
-                  <p className="text-xs text-slate-500 mt-0.5 font-mono">{appt.patientId.slice(0, 8)}…</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{appt.patient?.name || appt.patient?.phone || `${appt.patientId.slice(0, 8)}…`}</p>
                 </div>
                 <span className={`cliniq-badge ${
                   appt.status === "confirmed"

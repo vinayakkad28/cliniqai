@@ -102,6 +102,7 @@ model Doctor {
   consultations Consultation[]
   prescriptions Prescription[]
   invoices      Invoice[]
+  followups     Followup[]
 
   @@map("doctors")
   @@schema("clinic")
@@ -164,6 +165,11 @@ model Patient {
   userId            String?   @unique @map("user_id")
   fhirPatientId     String    @unique @map("fhir_patient_id")
   phone             String    @unique
+  name              String?
+  dateOfBirth       DateTime? @map("date_of_birth")
+  gender            String?
+  address           String?
+  bloodGroup        String?   @map("blood_group")
   createdByDoctorId String?   @map("created_by_doctor_id")
   createdAt         DateTime  @default(now()) @map("created_at")
   medicalHistory    Json?     @map("medical_history") @db.JsonB
@@ -183,6 +189,7 @@ model Patient {
   queueEntries  AppointmentQueue[]
   abdmConsents  AbdmConsent[]
   abdmRecords   AbdmHealthRecord[]
+  followups     Followup[]
 
   @@map("patients")
   @@schema("patients")
@@ -279,6 +286,10 @@ model Consultation {
   endedAt         DateTime?          @map("ended_at")
   chiefComplaint  String?            @map("chief_complaint")
   notes           String?
+  diagnosis       String?
+  icdCodes        String[]           @map("icd_codes")
+  vitals          Json?              @db.JsonB
+  soapNotes       Json?              @map("soap_notes") @db.JsonB
   status          ConsultationStatus @default(in_progress)
 
   appointment   Appointment    @relation(fields: [appointmentId], references: [id])
@@ -287,6 +298,7 @@ model Consultation {
   prescriptions Prescription[]
   invoices      Invoice[]
   labOrders     LabOrder[]
+  followups     Followup[]
 
   @@map("consultations")
   @@schema("consultations")
@@ -310,6 +322,8 @@ model Prescription {
   consultationId            String             @map("consultation_id")
   patientId                 String             @map("patient_id")
   doctorId                  String             @map("doctor_id")
+  medications               Json?              @db.JsonB
+  notes                     String?
   fhirMedicationRequestId   String?            @unique @map("fhir_medication_request_id")
   sentVia                   String?            @map("sent_via")
   sentAt                    DateTime?          @map("sent_at")
@@ -319,6 +333,7 @@ model Prescription {
   // E-prescription fields
   digitalSignature          String?            @map("digital_signature")
   qrData                    String?            @map("qr_data")
+  verificationCode          String?            @unique @map("verification_code")
   ePrescriptionGenerated    Boolean            @default(false) @map("e_prescription_generated")
   ePrescriptionGeneratedAt  DateTime?          @map("e_prescription_generated_at")
 
@@ -654,4 +669,37 @@ model AbdmHealthRecord {
 
   @@map("abdm_health_records")
   @@schema("abdm")
+}
+
+// ─────────────────────────────────────────
+// FOLLOW-UPS
+// ─────────────────────────────────────────
+
+enum FollowupStatus {
+  pending
+  sent
+  acknowledged
+  cancelled
+
+  @@schema("consultations")
+}
+
+model Followup {
+  id              String         @id @default(uuid())
+  patientId       String         @map("patient_id")
+  consultationId  String?        @map("consultation_id")
+  doctorId        String         @map("doctor_id")
+  scheduledDate   DateTime       @map("scheduled_date")
+  reason          String
+  channel         String         @default("whatsapp")
+  status          FollowupStatus @default(pending)
+  sentAt          DateTime?      @map("sent_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  patient      Patient       @relation(fields: [patientId], references: [id])
+  consultation Consultation? @relation(fields: [consultationId], references: [id])
+  doctor       Doctor        @relation(fields: [doctorId], references: [id])
+
+  @@map("followups")
+  @@schema("consultations")
 }
