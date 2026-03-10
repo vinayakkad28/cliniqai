@@ -221,7 +221,7 @@ describe('Auth API route', () => {
         data: { used: true },
       });
 
-      const result = mockPrisma.otpCode.updateMany.mock.results[0].value;
+      const result = mockPrisma.otpCode.updateMany.mock.results[0]!.value;
       const resolved = await result;
       expect(resolved.count).toBe(2);
     });
@@ -580,7 +580,7 @@ describe('Auth API route', () => {
     });
 
     it('rejects missing Authorization header', () => {
-      const authHeader = undefined;
+      const authHeader = undefined as string | undefined;
       const hasBearerToken = authHeader?.startsWith('Bearer ') ?? false;
 
       expect(hasBearerToken).toBe(false);

@@ -11,6 +11,8 @@ import {
   Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { colors } from "../theme";
+import { setTokens } from "../lib/auth";
 
 const BLUE = colors.primary[600];
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -74,8 +76,7 @@ export default function LoginScreen() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Invalid OTP");
-      // TODO: Store token in secure storage (expo-secure-store)
-      // and set auth context
+      setTokens(data.accessToken, data.refreshToken);
       router.replace("/(tabs)");
     } catch (err: unknown) {
       Alert.alert("Error", err instanceof Error ? err.message : "Verification failed. Please try again.");

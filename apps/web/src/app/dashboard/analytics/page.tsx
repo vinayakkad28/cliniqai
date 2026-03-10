@@ -33,34 +33,23 @@ export default function AnalyticsPage() {
     setLoading(true);
     try {
       const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
-      const [revenueRes, patientsRes] = await Promise.all([
+      const [summary, revenueRes] = await Promise.all([
+        api.analytics.summary(days),
         api.billing.dailyRevenue(days),
-        api.patients.list({ page: 1, limit: 1 }),
       ]);
 
-      const totalRevenue = Object.values(revenueRes.days ?? {}).reduce((a: number, b: number) => a + b, 0);
       setData({
-        totalPatients: patientsRes.meta?.total || 0,
-        totalConsultations: Object.keys(revenueRes.days ?? {}).length,
-        totalRevenue,
-        avgPatientsPerDay: Math.round((patientsRes.meta?.total || 0) / days),
-        topDiagnoses: [
-          { name: 'Upper Respiratory Infection', count: 45 },
-          { name: 'Type 2 Diabetes', count: 38 },
-          { name: 'Hypertension', count: 35 },
-          { name: 'Gastritis', count: 28 },
-          { name: 'Lower Back Pain', count: 22 },
-          { name: 'Anxiety Disorder', count: 18 },
-          { name: 'Allergic Rhinitis', count: 15 },
-          { name: 'Urinary Tract Infection', count: 12 },
-        ],
+        totalPatients: summary.totalPatients,
+        totalConsultations: summary.totalConsultations,
+        totalRevenue: Number(summary.totalRevenue),
+        avgPatientsPerDay: Math.round(summary.totalPatients / Math.max(days, 1)),
+        topDiagnoses: summary.topDiagnoses.length > 0
+          ? summary.topDiagnoses.map((d) => ({ name: d.diagnosis ?? 'Unknown', count: d.count }))
+          : [{ name: 'No data yet', count: 0 }],
         dailyRevenue: Object.entries(revenueRes.days ?? {}).map(([date, amount]) => ({ date, amount: amount as number })),
-        appointmentsByType: [
-          { type: 'Walk-in', count: 120 },
-          { type: 'Scheduled', count: 85 },
-          { type: 'Telemedicine', count: 30 },
-          { type: 'Follow-up', count: 65 },
-        ],
+        appointmentsByType: summary.appointmentsByType.length > 0
+          ? summary.appointmentsByType.map((a) => ({ type: a.type.replace('_', '-'), count: a.count }))
+          : [{ type: 'No data', count: 0 }],
         patientDemographics: [
           { ageGroup: '0-18', count: 15 },
           { ageGroup: '19-35', count: 30 },
@@ -68,10 +57,7 @@ export default function AnalyticsPage() {
           { ageGroup: '51-65', count: 18 },
           { ageGroup: '65+', count: 9 },
         ],
-        consultationsByHour: Array.from({ length: 12 }, (_, i) => ({
-          hour: i + 8,
-          count: Math.floor(Math.random() * 15) + 2,
-        })),
+        consultationsByHour: summary.consultationsByHour,
         aiUsageStats: [
           { feature: 'Prescription Assist', count: 234 },
           { feature: 'DDI Check', count: 189 },
@@ -82,7 +68,7 @@ export default function AnalyticsPage() {
           { feature: 'Notes Summary', count: 156 },
         ],
         weeklyRetention: 78,
-        avgConsultationDuration: 12,
+        avgConsultationDuration: summary.avgConsultationDuration,
       });
     } catch (err) {
       console.error('Failed to load analytics:', err);

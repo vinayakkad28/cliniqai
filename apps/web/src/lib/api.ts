@@ -474,5 +474,22 @@ export const abdm = {
     request<{ success: boolean; transactionId: string }>("POST", "/abdm-v2/records/push", data),
 };
 
+// ─── Analytics ──────────────────────────────────────────────────────────────
+
+export interface AnalyticsSummary {
+  totalPatients: number;
+  totalConsultations: number;
+  totalRevenue: number;
+  avgConsultationDuration: number;
+  topDiagnoses: { diagnosis: string; count: number }[];
+  appointmentsByType: { type: string; count: number }[];
+  consultationsByHour: { hour: number; count: number }[];
+}
+
+export const analytics = {
+  summary: (days = 30) =>
+    request<AnalyticsSummary>("GET", `/analytics/summary?days=${days}`),
+};
+
 // Unified API namespace for pages that import { api }
-export const api = { auth, doctors, staff, patients, appointments, consultations, billing, clinic, documents, labs, pharmacy, prescriptions, pharmacyQueue, telemedicine, insights, followups, auditLog, abdm };
+export const api = { auth, doctors, staff, patients, appointments, consultations, billing, clinic, documents, labs, pharmacy, prescriptions, pharmacyQueue, telemedicine, insights, followups, auditLog, abdm, analytics };
