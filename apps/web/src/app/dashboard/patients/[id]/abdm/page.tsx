@@ -53,10 +53,11 @@ export default function AbdmPage() {
   async function loadAbdmStatus() {
     try {
       const patient = await api.patients.get(patientId as string) as any;
-      const consentsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/abdm/consent/${patientId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const consents = consentsRes.ok ? await consentsRes.json() : [];
+      let consents: ConsentRecord[] = [];
+      try {
+        const consentsData = await api.abdm.getConsents(patientId as string) as any;
+        consents = Array.isArray(consentsData) ? consentsData : [];
+      } catch { /* ABDM not configured */ }
 
       setStatus({
         abhaNumber: patient.abha_number || null,

@@ -9,6 +9,7 @@ import Sidebar from "@/components/Sidebar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { CommandPalette } from "@/components/CommandPalette";
 import { NotificationBell } from "@/components/NotificationBell";
+import { InstallPrompt } from "@/components/InstallPrompt";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, token } = useAuth();
@@ -19,6 +20,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Real-time updates via SSE
   useRealtime(token);
+
+  // Register service worker for PWA
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -68,6 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
       </div>
       <CommandPalette />
+      <InstallPrompt />
     </div>
   );
 }

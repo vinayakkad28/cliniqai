@@ -30,6 +30,8 @@ export function CommandPalette() {
     { id: 'nav-pharmacy', label: 'Go to Pharmacy', icon: '💊', category: 'Navigation', action: () => router.push('/dashboard/pharmacy'), keywords: ['medicine', 'inventory'] },
     { id: 'nav-analytics', label: 'Go to Analytics', icon: '📊', category: 'Navigation', action: () => router.push('/dashboard/analytics'), keywords: ['reports', 'stats', 'insights'] },
     { id: 'nav-queue', label: 'Go to Queue Display', icon: '📺', category: 'Navigation', action: () => router.push('/dashboard/queue'), keywords: ['tv', 'waiting room'] },
+    { id: 'nav-followups', label: 'Go to Follow-ups', icon: '🔔', category: 'Navigation', action: () => router.push('/dashboard/follow-ups'), keywords: ['reminder', 'followup', 'follow up'] },
+    { id: 'nav-auditlog', label: 'Go to Audit Log', icon: '📋', category: 'Navigation', action: () => router.push('/dashboard/audit-log'), keywords: ['audit', 'log', 'history', 'trail'] },
     { id: 'nav-settings', label: 'Go to Settings', icon: '⚙️', category: 'Navigation', action: () => router.push('/dashboard/settings'), keywords: ['config', 'profile'] },
 
     // Quick Actions

@@ -26,6 +26,8 @@ import whatsappBotRouter from "./routes/whatsappBot.js";
 import ePrescriptionRouter from "./routes/ePrescription.js";
 import eventsRouter from "./routes/events.js";
 import abdmFullRouter from "./routes/abdmFull.js";
+import followupsRouter from "./routes/followups.js";
+import auditLogRouter from "./routes/auditLog.js";
 import { tracingMiddleware } from "./lib/monitoring.js";
 import { healthCheck } from "./lib/monitoring.js";
 
@@ -99,6 +101,8 @@ app.use("/api/whatsapp", whatsappBotRouter);
 app.use("/api/e-prescription", ePrescriptionRouter);
 app.use("/api/events", eventsRouter);
 app.use("/api/abdm-v2", abdmFullRouter);
+app.use("/api/followups", followupsRouter);
+app.use("/api/audit-log", auditLogRouter);
 
 // 404 handler
 app.use((_req, res) => {
