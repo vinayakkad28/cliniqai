@@ -378,5 +378,96 @@ export const insights = {
     request<{ insight: AiInsight; cached: boolean }>("GET", `/insights/longitudinal/${patientId}`),
 };
 
+// ─── Follow-ups ──────────────────────────────────────────────────────────────
+
+export interface FollowUp {
+  id: string;
+  patientId: string;
+  consultationId: string | null;
+  scheduledDate: string;
+  reason: string;
+  channel: 'sms' | 'whatsapp' | 'email';
+  status: 'pending' | 'sent' | 'acknowledged' | 'cancelled';
+  patientPhone?: string;
+  patientName?: string;
+  createdAt: string;
+}
+
+export const followups = {
+  list: (params?: { status?: string; patientId?: string; from?: string; to?: string; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString();
+    return request<{ data: FollowUp[]; meta: { total: number; page: number; limit: number; pages: number } }>(
+      "GET", `/followups${qs ? `?${qs}` : ""}`
+    );
+  },
+  create: (data: { patientId: string; consultationId?: string; scheduledDate: string; reason: string; channel: string }) =>
+    request<FollowUp>("POST", "/followups", data),
+  update: (id: string, data: { status?: string }) =>
+    request<FollowUp>("PATCH", `/followups/${id}`, data),
+  delete: (id: string) =>
+    request<{ message: string }>("DELETE", `/followups/${id}`),
+  due: (params?: { range?: string }) => {
+    const qs = params?.range ? `?range=${params.range}` : '';
+    return request<{ data: FollowUp[] }>("GET", `/followups/due${qs}`);
+  },
+  autoGenerate: (data: { consultationId: string }) =>
+    request<{ generated: FollowUp[] }>("POST", "/followups/auto-generate", data),
+};
+
+// ─── Audit Log ───────────────────────────────────────────────────────────────
+
+export interface AuditEntry {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  action: string;
+  resource: string;
+  resourceId: string;
+  details: string;
+  ip: string;
+}
+
+export const auditLog = {
+  list: (params?: { action?: string; resource?: string; search?: string; from?: string; to?: string; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString();
+    return request<{ data: AuditEntry[]; meta: { total: number; page: number; limit: number; pages: number } }>(
+      "GET", `/audit-log${qs ? `?${qs}` : ""}`
+    );
+  },
+  stats: () => request<{ today: number; total: number; byAction: Record<string, number>; byResource: Record<string, number> }>(
+    "GET", "/audit-log/stats"
+  ),
+  exportUrl: (params?: { from?: string; to?: string; action?: string }) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString();
+    return `/audit-log/export${qs ? `?${qs}` : ""}`;
+  },
+};
+
+// ─── ABDM v2 ─────────────────────────────────────────────────────────────────
+
+export const abdm = {
+  createAbha: (data: { patientId: string; aadhaarNumber: string }) =>
+    request<{ txnId: string; message: string }>("POST", "/abdm-v2/abha/create", data),
+  verifyAbhaOtp: (data: { patientId: string; txnId: string; otp: string }) =>
+    request<{ success: boolean; abhaNumber: string; abhaAddress: string }>("POST", "/abdm-v2/abha/verify-otp", data),
+  linkAbha: (data: { patientId: string; abhaNumber: string }) =>
+    request<{ success: boolean; abhaNumber: string }>("POST", "/abdm-v2/abha/link", data),
+  registerHip: () =>
+    request<{ success: boolean; hipId: string }>("POST", "/abdm-v2/hip/register"),
+  requestConsent: (data: { patientId: string; purpose?: string; healthInfoTypes?: string[] }) =>
+    request<{ requestId: string; status: string }>("POST", "/abdm-v2/consent/request", data),
+  getConsents: (patientId: string) =>
+    request<Array<{ id: string; status: string; purpose: string; createdAt: string }>>("GET", `/abdm-v2/consent/${patientId}`),
+  pushRecords: (data: { patientId: string; consultationId: string }) =>
+    request<{ success: boolean; transactionId: string }>("POST", "/abdm-v2/records/push", data),
+};
+
 // Unified API namespace for pages that import { api }
-export const api = { auth, doctors, staff, patients, appointments, consultations, billing, clinic, documents, labs, pharmacy, prescriptions, pharmacyQueue, telemedicine, insights };
+export const api = { auth, doctors, staff, patients, appointments, consultations, billing, clinic, documents, labs, pharmacy, prescriptions, pharmacyQueue, telemedicine, insights, followups, auditLog, abdm };

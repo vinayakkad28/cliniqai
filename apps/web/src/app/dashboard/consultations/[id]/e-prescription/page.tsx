@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
+import { QRCode } from '@/components/QRCode';
 
 interface EPrescriptionData {
   prescriptionId: string;
@@ -143,7 +144,7 @@ export default function EPrescriptionPage() {
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
-            Print
+            Print / Save PDF
           </button>
         </div>
       </div>
@@ -244,16 +245,12 @@ export default function EPrescriptionPage() {
         {/* Footer with QR + Signature */}
         <div className="border-t px-6 py-4 flex justify-between items-end">
           <div className="text-center">
-            {/* QR Code Placeholder - rendered client-side */}
-            <div className="w-24 h-24 bg-gray-100 border-2 border-dashed border-gray-300 rounded flex items-center justify-center">
-              <div className="text-center">
-                <svg className="w-8 h-8 text-gray-400 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                </svg>
-                <p className="text-[8px] text-gray-400 mt-1">Scan to verify</p>
-              </div>
-            </div>
-            <p className="text-[10px] text-gray-400 mt-1">Verification QR</p>
+            <QRCode
+              data={data.qrData || `cliniqai://verify/${data.prescriptionId}`}
+              size={96}
+              className="border border-gray-200 rounded"
+            />
+            <p className="text-[10px] text-gray-400 mt-1">Scan to verify</p>
           </div>
 
           <div className="text-right">

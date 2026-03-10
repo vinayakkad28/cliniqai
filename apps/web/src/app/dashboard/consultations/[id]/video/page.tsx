@@ -39,6 +39,9 @@ export default function VideoConsultationPage() {
 
   const [notes, setNotes] = useState('');
   const [showNotes, setShowNotes] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{ sender: string; text: string; time: string }[]>([]);
+  const [chatInput, setChatInput] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -217,7 +220,13 @@ export default function VideoConsultationPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowNotes(!showNotes)}
+            onClick={() => { setShowChat(!showChat); if (showNotes) setShowNotes(false); }}
+            className={`px-3 py-1.5 rounded-lg text-sm ${showChat ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+          >
+            Chat {chatMessages.length > 0 && <span className="ml-1 bg-blue-500 text-white text-xs rounded-full px-1.5">{chatMessages.length}</span>}
+          </button>
+          <button
+            onClick={() => { setShowNotes(!showNotes); if (showChat) setShowChat(false); }}
             className={`px-3 py-1.5 rounded-lg text-sm ${showNotes ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
           >
             Notes
@@ -270,6 +279,64 @@ export default function VideoConsultationPage() {
               className="flex-1 p-4 bg-transparent text-gray-200 text-sm resize-none outline-none placeholder-gray-500"
               placeholder="Type your notes here... (auto-saved when call ends)"
             />
+          </div>
+        )}
+
+        {/* Chat Panel */}
+        {showChat && (
+          <div className="w-1/3 bg-gray-800 border-l border-gray-700 flex flex-col">
+            <div className="p-4 border-b border-gray-700">
+              <h3 className="text-white font-medium">In-Call Chat</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {chatMessages.length === 0 && (
+                <p className="text-gray-500 text-sm text-center mt-8">No messages yet. Send a message to the patient.</p>
+              )}
+              {chatMessages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.sender === 'doctor' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[80%] rounded-lg px-3 py-2 ${
+                    msg.sender === 'doctor' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200'
+                  }`}>
+                    <p className="text-sm">{msg.text}</p>
+                    <p className="text-[10px] opacity-60 mt-0.5">{msg.time}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-3 border-t border-gray-700 flex gap-2">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && chatInput.trim()) {
+                    setChatMessages((prev) => [...prev, {
+                      sender: 'doctor',
+                      text: chatInput.trim(),
+                      time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                    }]);
+                    setChatInput('');
+                  }
+                }}
+                className="flex-1 px-3 py-2 bg-gray-700 text-white text-sm rounded-lg outline-none placeholder-gray-500"
+                placeholder="Type a message..."
+              />
+              <button
+                onClick={() => {
+                  if (chatInput.trim()) {
+                    setChatMessages((prev) => [...prev, {
+                      sender: 'doctor',
+                      text: chatInput.trim(),
+                      time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                    }]);
+                    setChatInput('');
+                  }
+                }}
+                className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+              >
+                Send
+              </button>
+            </div>
           </div>
         )}
       </div>
