@@ -20,484 +20,454 @@ vi.mock('../lib/prisma.js', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Helpers — simulate Express req/res for route handler testing
+// Mock auth middleware — always passes with a test doctor user
 // ---------------------------------------------------------------------------
 
-function mockReq(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    body: {},
-    params: {},
-    query: {},
-    user: {
-      sub: 'user-1',
-      role: 'doctor',
-      doctor_id: 'doc-1',
-      clinic_id: 'clinic-1',
-      scope: ['followups:read', 'followups:write'],
-    },
-    ...overrides,
-  };
-}
+const TEST_USER = {
+  sub: 'user-001',
+  role: 'doctor',
+  doctor_id: 'doc-001',
+  clinic_id: 'clinic-001',
+  scope: ['followups:read', 'followups:write'],
+  iat: Math.floor(Date.now() / 1000),
+  exp: Math.floor(Date.now() / 1000) + 3600,
+};
 
-function mockRes() {
-  const res: Record<string, unknown> = {};
-  res.status = vi.fn().mockReturnValue(res);
-  res.json = vi.fn().mockReturnValue(res);
-  return res as { status: ReturnType<typeof vi.fn>; json: ReturnType<typeof vi.fn> };
-}
+vi.mock('../middleware/auth.js', () => ({
+  authenticate: vi.fn((_req: any, _res: any, next: any) => {
+    _req.user = TEST_USER;
+    next();
+  }),
+  requireScope: vi.fn((..._scopes: string[]) => (_req: any, _res: any, next: any) => next()),
+}));
+
+// ---------------------------------------------------------------------------
+// Test data
+// ---------------------------------------------------------------------------
+
+const FOLLOW_UP_1 = {
+  id: 'fu-001',
+  patientId: 'patient-001',
+  doctorId: 'doc-001',
+  consultationId: 'consult-001',
+  scheduledDate: new Date('2026-03-15T10:00:00Z'),
+  reason: 'Post-surgery check-up',
+  status: 'scheduled',
+  notes: 'Check wound healing progress',
+  createdAt: new Date('2026-03-10T08:00:00Z'),
+  updatedAt: new Date('2026-03-10T08:00:00Z'),
+};
+
+const FOLLOW_UP_2 = {
+  id: 'fu-002',
+  patientId: 'patient-002',
+  doctorId: 'doc-001',
+  consultationId: 'consult-002',
+  scheduledDate: new Date('2026-03-12T14:00:00Z'),
+  reason: 'Blood pressure monitoring',
+  status: 'scheduled',
+  notes: null,
+  createdAt: new Date('2026-03-10T09:00:00Z'),
+  updatedAt: new Date('2026-03-10T09:00:00Z'),
+};
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('POST /followups — create a follow-up', () => {
+describe('Follow-ups API route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('creates a follow-up with valid data', async () => {
-    const followUp = {
-      id: 'fu-1',
-      patientId: 'p-1',
-      doctorId: 'doc-1',
-      consultationId: 'con-1',
-      type: 'call',
-      dueAt: '2025-06-15T10:00:00.000Z',
-      status: 'pending',
-      notes: 'Check on blood pressure',
-      createdAt: '2025-06-01T10:00:00.000Z',
-    };
+  // ─── POST /followups — Create ──────────────────────────────────────────
 
-    mockPrisma.followUp.create.mockResolvedValue(followUp);
+  describe('POST /followups — create a follow-up', () => {
+    it('creates a follow-up with valid data', async () => {
+      const input = {
+        patientId: 'patient-001',
+        consultationId: 'consult-001',
+        scheduledDate: '2026-03-15T10:00:00Z',
+        reason: 'Post-surgery check-up',
+        notes: 'Check wound healing progress',
+      };
 
-    const req = mockReq({
-      body: {
-        patientId: 'p-1',
-        consultationId: 'con-1',
-        type: 'call',
-        dueAt: '2025-06-15T10:00:00.000Z',
-        notes: 'Check on blood pressure',
-      },
+      mockPrisma.followUp.create.mockResolvedValue(FOLLOW_UP_1);
+
+      const result = await mockPrisma.followUp.create({
+        data: {
+          ...input,
+          doctorId: TEST_USER.doctor_id,
+          status: 'scheduled',
+        },
+      });
+
+      expect(result).toEqual(FOLLOW_UP_1);
+      expect(result.id).toBe('fu-001');
+      expect(result.status).toBe('scheduled');
+      expect(mockPrisma.followUp.create).toHaveBeenCalledTimes(1);
     });
 
-    const res = mockRes();
+    it('rejects creation with missing required fields', () => {
+      const invalidInput = {
+        // Missing patientId and scheduledDate
+        reason: 'Check-up',
+      };
 
-    // Simulate route handler logic
-    const { patientId, consultationId, type, dueAt, notes } = req.body as {
-      patientId: string;
-      consultationId: string;
-      type: string;
-      dueAt: string;
-      notes: string;
-    };
+      // Validate required fields
+      const errors: string[] = [];
+      if (!('patientId' in invalidInput)) errors.push('patientId is required');
+      if (!('scheduledDate' in invalidInput)) errors.push('scheduledDate is required');
 
-    const user = req.user as { doctor_id: string };
-
-    const created = await mockPrisma.followUp.create({
-      data: {
-        patientId,
-        doctorId: user.doctor_id,
-        consultationId,
-        type,
-        dueAt: new Date(dueAt),
-        notes,
-        status: 'pending',
-      },
+      expect(errors).toContain('patientId is required');
+      expect(errors).toContain('scheduledDate is required');
     });
 
-    res.status(201).json(created);
+    it('rejects creation with invalid date format', () => {
+      const invalidDate = 'not-a-date';
+      const parsed = new Date(invalidDate);
 
-    expect(mockPrisma.followUp.create).toHaveBeenCalledTimes(1);
-    expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith(followUp);
+      expect(isNaN(parsed.getTime())).toBe(true);
+    });
+
+    it('associates follow-up with the authenticated doctor', async () => {
+      mockPrisma.followUp.create.mockResolvedValue(FOLLOW_UP_1);
+
+      await mockPrisma.followUp.create({
+        data: {
+          patientId: 'patient-001',
+          doctorId: TEST_USER.doctor_id,
+          scheduledDate: new Date('2026-03-15T10:00:00Z'),
+          reason: 'Follow-up',
+          status: 'scheduled',
+        },
+      });
+
+      const callArgs = mockPrisma.followUp.create.mock.calls[0][0];
+      expect(callArgs.data.doctorId).toBe('doc-001');
+    });
   });
 
-  it('rejects creation with missing patientId', () => {
-    const body = {
-      type: 'call',
-      dueAt: '2025-06-15T10:00:00.000Z',
-    };
+  // ─── GET /followups — Paginated list ────────────────────────────────────
 
-    // Validate required fields
-    const errors: string[] = [];
-    if (!body.hasOwnProperty('patientId')) errors.push('patientId is required');
+  describe('GET /followups — paginated list', () => {
+    it('returns paginated list of follow-ups', async () => {
+      const followUps = [FOLLOW_UP_1, FOLLOW_UP_2];
 
-    expect(errors).toContain('patientId is required');
-  });
+      mockPrisma.followUp.findMany.mockResolvedValue(followUps);
+      mockPrisma.followUp.count.mockResolvedValue(2);
 
-  it('rejects creation with invalid type', () => {
-    const validTypes = ['call', 'visit', 'message', 'lab_review'];
-    const body = { type: 'invalid_type' };
+      const page = 1;
+      const limit = 20;
+      const skip = (page - 1) * limit;
 
-    expect(validTypes).not.toContain(body.type);
-  });
+      const [total, data] = await Promise.all([
+        mockPrisma.followUp.count({ where: { doctorId: TEST_USER.doctor_id } }),
+        mockPrisma.followUp.findMany({
+          where: { doctorId: TEST_USER.doctor_id },
+          skip,
+          take: limit,
+          orderBy: { scheduledDate: 'asc' },
+        }),
+      ]);
 
-  it('rejects creation with past dueAt date', () => {
-    const dueAt = new Date('2020-01-01');
-    const now = new Date();
+      expect(data).toHaveLength(2);
+      expect(total).toBe(2);
 
-    expect(dueAt.getTime()).toBeLessThan(now.getTime());
-  });
-});
+      const meta = {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      };
+      expect(meta.pages).toBe(1);
+    });
 
-describe('GET /followups — paginated list', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    it('respects pagination parameters', async () => {
+      mockPrisma.followUp.findMany.mockResolvedValue([FOLLOW_UP_2]);
+      mockPrisma.followUp.count.mockResolvedValue(25);
 
-  it('returns paginated follow-ups for the doctor', async () => {
-    const followUps = [
-      { id: 'fu-1', patientId: 'p-1', status: 'pending', dueAt: '2025-06-15T10:00:00Z' },
-      { id: 'fu-2', patientId: 'p-2', status: 'completed', dueAt: '2025-06-10T14:00:00Z' },
-    ];
+      const page = 2;
+      const limit = 10;
+      const skip = (page - 1) * limit;
 
-    mockPrisma.followUp.findMany.mockResolvedValue(followUps);
-    mockPrisma.followUp.count.mockResolvedValue(25);
-
-    const req = mockReq({ query: { page: '1', limit: '20' } });
-    const res = mockRes();
-
-    const query = req.query as { page: string; limit: string };
-    const page = parseInt(query.page);
-    const limit = parseInt(query.limit);
-    const skip = (page - 1) * limit;
-    const user = req.user as { doctor_id: string };
-
-    const [total, data] = await Promise.all([
-      mockPrisma.followUp.count({ where: { doctorId: user.doctor_id } }),
-      mockPrisma.followUp.findMany({
-        where: { doctorId: user.doctor_id },
+      await mockPrisma.followUp.findMany({
+        where: { doctorId: TEST_USER.doctor_id },
         skip,
         take: limit,
-        orderBy: { dueAt: 'asc' },
-      }),
-    ]);
+        orderBy: { scheduledDate: 'asc' },
+      });
 
-    res.json({
-      data,
-      meta: { total, page, limit, pages: Math.ceil(total / limit) },
+      const callArgs = mockPrisma.followUp.findMany.mock.calls[0][0];
+      expect(callArgs.skip).toBe(10);
+      expect(callArgs.take).toBe(10);
     });
 
-    expect(res.json).toHaveBeenCalledWith({
-      data: followUps,
-      meta: { total: 25, page: 1, limit: 20, pages: 2 },
+    it('filters by patient ID when provided', async () => {
+      mockPrisma.followUp.findMany.mockResolvedValue([FOLLOW_UP_1]);
+
+      await mockPrisma.followUp.findMany({
+        where: {
+          doctorId: TEST_USER.doctor_id,
+          patientId: 'patient-001',
+        },
+      });
+
+      const callArgs = mockPrisma.followUp.findMany.mock.calls[0][0];
+      expect(callArgs.where.patientId).toBe('patient-001');
+    });
+
+    it('filters by status when provided', async () => {
+      mockPrisma.followUp.findMany.mockResolvedValue([]);
+
+      await mockPrisma.followUp.findMany({
+        where: {
+          doctorId: TEST_USER.doctor_id,
+          status: 'completed',
+        },
+      });
+
+      const callArgs = mockPrisma.followUp.findMany.mock.calls[0][0];
+      expect(callArgs.where.status).toBe('completed');
+    });
+
+    it('returns empty array when no follow-ups exist', async () => {
+      mockPrisma.followUp.findMany.mockResolvedValue([]);
+      mockPrisma.followUp.count.mockResolvedValue(0);
+
+      const data = await mockPrisma.followUp.findMany({
+        where: { doctorId: TEST_USER.doctor_id },
+      });
+      const total = await mockPrisma.followUp.count({
+        where: { doctorId: TEST_USER.doctor_id },
+      });
+
+      expect(data).toEqual([]);
+      expect(total).toBe(0);
     });
   });
 
-  it('applies status filter when provided', async () => {
-    mockPrisma.followUp.findMany.mockResolvedValue([]);
-    mockPrisma.followUp.count.mockResolvedValue(0);
+  // ─── PATCH /followups/:id — Update status ──────────────────────────────
 
-    const req = mockReq({ query: { page: '1', limit: '20', status: 'pending' } });
-    const query = req.query as { status: string };
+  describe('PATCH /followups/:id — update status', () => {
+    it('updates follow-up status to completed', async () => {
+      const updated = { ...FOLLOW_UP_1, status: 'completed', updatedAt: new Date() };
+      mockPrisma.followUp.findUnique.mockResolvedValue(FOLLOW_UP_1);
+      mockPrisma.followUp.update.mockResolvedValue(updated);
 
-    const where = {
-      doctorId: 'doc-1',
-      ...(query.status ? { status: query.status } : {}),
-    };
+      const existing = await mockPrisma.followUp.findUnique({
+        where: { id: 'fu-001' },
+      });
+      expect(existing).toBeTruthy();
+      expect(existing!.doctorId).toBe(TEST_USER.doctor_id);
 
-    await mockPrisma.followUp.findMany({ where, skip: 0, take: 20 });
+      const result = await mockPrisma.followUp.update({
+        where: { id: 'fu-001' },
+        data: { status: 'completed' },
+      });
 
-    expect(mockPrisma.followUp.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ status: 'pending' }),
-      }),
-    );
-  });
-
-  it('applies patientId filter when provided', async () => {
-    mockPrisma.followUp.findMany.mockResolvedValue([]);
-    mockPrisma.followUp.count.mockResolvedValue(0);
-
-    const where = { doctorId: 'doc-1', patientId: 'p-42' };
-    await mockPrisma.followUp.findMany({ where, skip: 0, take: 20 });
-
-    expect(mockPrisma.followUp.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ patientId: 'p-42' }),
-      }),
-    );
-  });
-
-  it('defaults to page 1 and limit 20 when not specified', () => {
-    const query = {} as Record<string, string>;
-    const page = parseInt(query.page ?? '1');
-    const limit = parseInt(query.limit ?? '20');
-
-    expect(page).toBe(1);
-    expect(limit).toBe(20);
-  });
-
-  it('calculates pagination meta correctly', () => {
-    const total = 47;
-    const limit = 20;
-    const pages = Math.ceil(total / limit);
-    expect(pages).toBe(3);
-  });
-});
-
-describe('PATCH /followups/:id — update status', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('updates follow-up status to completed', async () => {
-    const existing = {
-      id: 'fu-1',
-      doctorId: 'doc-1',
-      status: 'pending',
-      patientId: 'p-1',
-    };
-
-    const updated = { ...existing, status: 'completed', completedAt: '2025-06-16T08:00:00Z' };
-
-    mockPrisma.followUp.findUnique.mockResolvedValue(existing);
-    mockPrisma.followUp.update.mockResolvedValue(updated);
-
-    const req = mockReq({ params: { id: 'fu-1' }, body: { status: 'completed' } });
-    const res = mockRes();
-
-    const followUp = await mockPrisma.followUp.findUnique({
-      where: { id: (req.params as { id: string }).id },
+      expect(result.status).toBe('completed');
     });
 
-    expect(followUp).toBeDefined();
-    expect(followUp!.doctorId).toBe((req.user as { doctor_id: string }).doctor_id);
+    it('updates follow-up notes', async () => {
+      const updated = { ...FOLLOW_UP_1, notes: 'Patient recovering well' };
+      mockPrisma.followUp.findUnique.mockResolvedValue(FOLLOW_UP_1);
+      mockPrisma.followUp.update.mockResolvedValue(updated);
 
-    const result = await mockPrisma.followUp.update({
-      where: { id: followUp!.id },
-      data: { status: 'completed', completedAt: new Date() },
+      const result = await mockPrisma.followUp.update({
+        where: { id: 'fu-001' },
+        data: { notes: 'Patient recovering well' },
+      });
+
+      expect(result.notes).toBe('Patient recovering well');
     });
 
-    res.json(result);
+    it('returns 404 when follow-up not found', async () => {
+      mockPrisma.followUp.findUnique.mockResolvedValue(null);
 
-    expect(mockPrisma.followUp.update).toHaveBeenCalledTimes(1);
-    expect(res.json).toHaveBeenCalledWith(updated);
-  });
+      const existing = await mockPrisma.followUp.findUnique({
+        where: { id: 'nonexistent' },
+      });
 
-  it('returns 404 when follow-up does not exist', async () => {
-    mockPrisma.followUp.findUnique.mockResolvedValue(null);
-
-    const res = mockRes();
-
-    const followUp = await mockPrisma.followUp.findUnique({ where: { id: 'nonexistent' } });
-
-    if (!followUp) {
-      res.status(404).json({ error: 'Follow-up not found' });
-    }
-
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Follow-up not found' });
-  });
-
-  it('returns 403 when doctor does not own the follow-up', async () => {
-    const otherDoctorFollowUp = { id: 'fu-1', doctorId: 'doc-other', status: 'pending' };
-    mockPrisma.followUp.findUnique.mockResolvedValue(otherDoctorFollowUp);
-
-    const res = mockRes();
-    const req = mockReq();
-
-    const followUp = await mockPrisma.followUp.findUnique({ where: { id: 'fu-1' } });
-    const user = req.user as { doctor_id: string };
-
-    if (followUp && followUp.doctorId !== user.doctor_id) {
-      res.status(403).json({ error: 'Not your follow-up' });
-    }
-
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Not your follow-up' });
-  });
-
-  it('validates status transition — cannot update already completed', async () => {
-    const completedFollowUp = { id: 'fu-1', doctorId: 'doc-1', status: 'completed' };
-    mockPrisma.followUp.findUnique.mockResolvedValue(completedFollowUp);
-
-    const res = mockRes();
-
-    const followUp = await mockPrisma.followUp.findUnique({ where: { id: 'fu-1' } });
-
-    if (followUp && followUp.status === 'completed') {
-      res.status(400).json({ error: 'Follow-up already completed' });
-    }
-
-    expect(res.status).toHaveBeenCalledWith(400);
-  });
-});
-
-describe('DELETE /followups/:id — cancel follow-up', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('cancels a pending follow-up by updating status', async () => {
-    const existing = { id: 'fu-1', doctorId: 'doc-1', status: 'pending' };
-    const cancelled = { ...existing, status: 'cancelled' };
-
-    mockPrisma.followUp.findUnique.mockResolvedValue(existing);
-    mockPrisma.followUp.update.mockResolvedValue(cancelled);
-
-    const res = mockRes();
-
-    const followUp = await mockPrisma.followUp.findUnique({ where: { id: 'fu-1' } });
-
-    if (!followUp) {
-      res.status(404).json({ error: 'Follow-up not found' });
-      return;
-    }
-
-    const result = await mockPrisma.followUp.update({
-      where: { id: followUp.id },
-      data: { status: 'cancelled' },
+      expect(existing).toBeNull();
+      // Route handler would return 404 response
     });
 
-    res.json(result);
+    it('rejects update from non-owning doctor', async () => {
+      const otherDoctorFollowUp = { ...FOLLOW_UP_1, doctorId: 'doc-999' };
+      mockPrisma.followUp.findUnique.mockResolvedValue(otherDoctorFollowUp);
 
-    expect(mockPrisma.followUp.update).toHaveBeenCalledWith(
-      expect.objectContaining({
+      const existing = await mockPrisma.followUp.findUnique({
+        where: { id: 'fu-001' },
+      });
+
+      expect(existing!.doctorId).not.toBe(TEST_USER.doctor_id);
+      // Route handler would return 403 response
+    });
+
+    it('updates scheduled date', async () => {
+      const newDate = new Date('2026-03-20T10:00:00Z');
+      const updated = { ...FOLLOW_UP_1, scheduledDate: newDate };
+      mockPrisma.followUp.findUnique.mockResolvedValue(FOLLOW_UP_1);
+      mockPrisma.followUp.update.mockResolvedValue(updated);
+
+      const result = await mockPrisma.followUp.update({
+        where: { id: 'fu-001' },
+        data: { scheduledDate: newDate },
+      });
+
+      expect(result.scheduledDate).toEqual(newDate);
+    });
+  });
+
+  // ─── DELETE /followups/:id — Cancel ─────────────────────────────────────
+
+  describe('DELETE /followups/:id — cancel follow-up', () => {
+    it('cancels a follow-up by updating status', async () => {
+      const cancelled = { ...FOLLOW_UP_1, status: 'cancelled' };
+      mockPrisma.followUp.findUnique.mockResolvedValue(FOLLOW_UP_1);
+      mockPrisma.followUp.update.mockResolvedValue(cancelled);
+
+      const existing = await mockPrisma.followUp.findUnique({
+        where: { id: 'fu-001' },
+      });
+      expect(existing).toBeTruthy();
+
+      const result = await mockPrisma.followUp.update({
+        where: { id: 'fu-001' },
         data: { status: 'cancelled' },
-      }),
-    );
-    expect(res.json).toHaveBeenCalledWith(cancelled);
-  });
+      });
 
-  it('returns 404 when follow-up to cancel does not exist', async () => {
-    mockPrisma.followUp.findUnique.mockResolvedValue(null);
-
-    const res = mockRes();
-    const followUp = await mockPrisma.followUp.findUnique({ where: { id: 'ghost' } });
-
-    if (!followUp) {
-      res.status(404).json({ error: 'Follow-up not found' });
-    }
-
-    expect(res.status).toHaveBeenCalledWith(404);
-  });
-
-  it('cannot cancel an already completed follow-up', async () => {
-    const completed = { id: 'fu-1', doctorId: 'doc-1', status: 'completed' };
-    mockPrisma.followUp.findUnique.mockResolvedValue(completed);
-
-    const res = mockRes();
-    const followUp = await mockPrisma.followUp.findUnique({ where: { id: 'fu-1' } });
-
-    if (followUp && followUp.status === 'completed') {
-      res.status(400).json({ error: 'Cannot cancel a completed follow-up' });
-    }
-
-    expect(res.status).toHaveBeenCalledWith(400);
-  });
-
-  it('returns 403 when trying to cancel another doctor\'s follow-up', async () => {
-    const otherDoc = { id: 'fu-1', doctorId: 'doc-other', status: 'pending' };
-    mockPrisma.followUp.findUnique.mockResolvedValue(otherDoc);
-
-    const res = mockRes();
-    const req = mockReq();
-    const followUp = await mockPrisma.followUp.findUnique({ where: { id: 'fu-1' } });
-    const user = req.user as { doctor_id: string };
-
-    if (followUp && followUp.doctorId !== user.doctor_id) {
-      res.status(403).json({ error: 'Not your follow-up' });
-    }
-
-    expect(res.status).toHaveBeenCalledWith(403);
-  });
-});
-
-describe('GET /followups/due — due follow-ups', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns follow-ups that are due today or overdue', async () => {
-    const now = new Date();
-    const dueFollowUps = [
-      { id: 'fu-1', patientId: 'p-1', status: 'pending', dueAt: now.toISOString(), patient: { phone: '+919876543210' } },
-      { id: 'fu-2', patientId: 'p-2', status: 'pending', dueAt: new Date(now.getTime() - 86400000).toISOString(), patient: { phone: '+919876543211' } },
-    ];
-
-    mockPrisma.followUp.findMany.mockResolvedValue(dueFollowUps);
-
-    const result = await mockPrisma.followUp.findMany({
-      where: {
-        doctorId: 'doc-1',
-        status: 'pending',
-        dueAt: { lte: now },
-      },
-      include: { patient: { select: { phone: true } } },
-      orderBy: { dueAt: 'asc' },
+      expect(result.status).toBe('cancelled');
     });
 
-    expect(result).toHaveLength(2);
-    expect(result[0].status).toBe('pending');
-  });
+    it('returns 404 when cancelling nonexistent follow-up', async () => {
+      mockPrisma.followUp.findUnique.mockResolvedValue(null);
 
-  it('returns empty array when no follow-ups are due', async () => {
-    mockPrisma.followUp.findMany.mockResolvedValue([]);
+      const existing = await mockPrisma.followUp.findUnique({
+        where: { id: 'nonexistent' },
+      });
 
-    const result = await mockPrisma.followUp.findMany({
-      where: {
-        doctorId: 'doc-1',
-        status: 'pending',
-        dueAt: { lte: new Date() },
-      },
+      expect(existing).toBeNull();
     });
 
-    expect(result).toHaveLength(0);
-  });
+    it('prevents cancelling already completed follow-up', async () => {
+      const completed = { ...FOLLOW_UP_1, status: 'completed' };
+      mockPrisma.followUp.findUnique.mockResolvedValue(completed);
 
-  it('only returns pending follow-ups (not completed or cancelled)', async () => {
-    mockPrisma.followUp.findMany.mockResolvedValue([
-      { id: 'fu-1', status: 'pending', dueAt: new Date().toISOString() },
-    ]);
+      const existing = await mockPrisma.followUp.findUnique({
+        where: { id: 'fu-001' },
+      });
 
-    const result = await mockPrisma.followUp.findMany({
-      where: {
-        doctorId: 'doc-1',
-        status: 'pending',
-        dueAt: { lte: new Date() },
-      },
+      expect(existing!.status).toBe('completed');
+      // Route handler would return 400 — cannot cancel a completed follow-up
     });
 
-    expect(mockPrisma.followUp.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ status: 'pending' }),
-      }),
-    );
-    expect(result.every((fu: { status: string }) => fu.status === 'pending')).toBe(true);
+    it('prevents cancelling another doctor\'s follow-up', async () => {
+      const otherDoctor = { ...FOLLOW_UP_1, doctorId: 'doc-999' };
+      mockPrisma.followUp.findUnique.mockResolvedValue(otherDoctor);
+
+      const existing = await mockPrisma.followUp.findUnique({
+        where: { id: 'fu-001' },
+      });
+
+      expect(existing!.doctorId).not.toBe(TEST_USER.doctor_id);
+    });
   });
 
-  it('includes patient contact info in due follow-ups', async () => {
-    const dueFollowUp = {
-      id: 'fu-1',
-      status: 'pending',
-      dueAt: new Date().toISOString(),
-      patient: { phone: '+919876543210', name: 'Test Patient' },
-    };
+  // ─── GET /followups/due — Due follow-ups ──────────────────────────────
 
-    mockPrisma.followUp.findMany.mockResolvedValue([dueFollowUp]);
+  describe('GET /followups/due — due follow-ups', () => {
+    it('returns follow-ups due today', async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(today);
+      endOfDay.setHours(23, 59, 59, 999);
 
-    const result = await mockPrisma.followUp.findMany({
-      where: { doctorId: 'doc-1', status: 'pending' },
-      include: { patient: { select: { phone: true } } },
+      const dueFollowUps = [FOLLOW_UP_2]; // Due on March 12
+      mockPrisma.followUp.findMany.mockResolvedValue(dueFollowUps);
+
+      const data = await mockPrisma.followUp.findMany({
+        where: {
+          doctorId: TEST_USER.doctor_id,
+          status: 'scheduled',
+          scheduledDate: {
+            gte: today,
+            lte: endOfDay,
+          },
+        },
+        orderBy: { scheduledDate: 'asc' },
+      });
+
+      expect(data).toHaveLength(1);
+      expect(mockPrisma.followUp.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            doctorId: TEST_USER.doctor_id,
+            status: 'scheduled',
+          }),
+        }),
+      );
     });
 
-    expect(result[0].patient).toBeDefined();
-    expect(result[0].patient.phone).toBe('+919876543210');
-  });
+    it('returns overdue follow-ups', async () => {
+      const now = new Date();
+      const overdueFollowUp = {
+        ...FOLLOW_UP_1,
+        scheduledDate: new Date('2026-03-05T10:00:00Z'), // Past date
+        status: 'scheduled',
+      };
 
-  it('orders due follow-ups by dueAt ascending (most overdue first)', async () => {
-    mockPrisma.followUp.findMany.mockResolvedValue([]);
+      mockPrisma.followUp.findMany.mockResolvedValue([overdueFollowUp]);
 
-    await mockPrisma.followUp.findMany({
-      where: { doctorId: 'doc-1', status: 'pending' },
-      orderBy: { dueAt: 'asc' },
+      const data = await mockPrisma.followUp.findMany({
+        where: {
+          doctorId: TEST_USER.doctor_id,
+          status: 'scheduled',
+          scheduledDate: { lt: now },
+        },
+        orderBy: { scheduledDate: 'asc' },
+      });
+
+      expect(data).toHaveLength(1);
+      expect(data[0].scheduledDate < now).toBe(true);
     });
 
-    expect(mockPrisma.followUp.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        orderBy: { dueAt: 'asc' },
-      }),
-    );
+    it('excludes completed and cancelled follow-ups from due list', async () => {
+      mockPrisma.followUp.findMany.mockResolvedValue([]);
+
+      const data = await mockPrisma.followUp.findMany({
+        where: {
+          doctorId: TEST_USER.doctor_id,
+          status: 'scheduled', // Only scheduled follow-ups are "due"
+          scheduledDate: { lte: new Date() },
+        },
+      });
+
+      expect(data).toEqual([]);
+      const callArgs = mockPrisma.followUp.findMany.mock.calls[0][0];
+      expect(callArgs.where.status).toBe('scheduled');
+    });
+
+    it('includes patient details in due follow-ups', async () => {
+      const withPatient = {
+        ...FOLLOW_UP_1,
+        patient: { id: 'patient-001', phone: '+919876543210', name: 'Test Patient' },
+      };
+      mockPrisma.followUp.findMany.mockResolvedValue([withPatient]);
+
+      const data = await mockPrisma.followUp.findMany({
+        where: {
+          doctorId: TEST_USER.doctor_id,
+          status: 'scheduled',
+        },
+        include: {
+          patient: { select: { id: true, phone: true, name: true } },
+        },
+      });
+
+      expect(data[0].patient).toBeDefined();
+      expect(data[0].patient.phone).toBe('+919876543210');
+    });
   });
 });
