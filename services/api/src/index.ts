@@ -26,10 +26,21 @@ import whatsappBotRouter from "./routes/whatsappBot.js";
 import ePrescriptionRouter from "./routes/ePrescription.js";
 import eventsRouter from "./routes/events.js";
 import abdmFullRouter from "./routes/abdmFull.js";
-import followupsRouter from "./routes/followups.js";
+import { followupsRouter } from "./routes/followups.js";
+import { analyticsRouter } from "./routes/analytics.js";
 import auditLogRouter from "./routes/auditLog.js";
 import { tracingMiddleware } from "./lib/monitoring.js";
 import { healthCheck } from "./lib/monitoring.js";
+
+// Production environment validation
+if (process.env.NODE_ENV !== 'development') {
+  const required = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'DATABASE_URL'];
+  const missing = required.filter(k => !process.env[k] || process.env[k]!.includes('your-') || process.env[k]!.includes('change-me'));
+  if (missing.length > 0) {
+    console.error(`FATAL: Missing or placeholder environment variables: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+}
 
 // Prevent unhandled rejections from crashing the process in dev
 process.on("unhandledRejection", (reason) => {
@@ -103,6 +114,7 @@ app.use("/api/events", eventsRouter);
 app.use("/api/abdm-v2", abdmFullRouter);
 app.use("/api/followups", followupsRouter);
 app.use("/api/audit-log", auditLogRouter);
+app.use("/api/analytics", analyticsRouter);
 
 // 404 handler
 app.use((_req, res) => {

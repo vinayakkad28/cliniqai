@@ -16,7 +16,7 @@ interface Invoice {
   paidAt: string | null;
   paymentMethod: string | null;
   createdAt: string;
-  patient: { id: string; phone: string };
+  patient: { id: string; phone: string; name?: string | null };
 }
 
 interface RevenueData {
@@ -156,7 +156,7 @@ export default function BillingPage() {
                   <td className="px-4 py-3 text-sm text-gray-500">
                     {new Date(inv.createdAt).toLocaleDateString("en-IN")}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{inv.patient.phone}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{inv.patient.name || inv.patient.phone}</td>
                   <td className="px-4 py-3 text-sm text-gray-700">₹{Number(inv.amount).toLocaleString("en-IN")}</td>
                   <td className="px-4 py-3 text-sm text-gray-500">₹{Number(inv.gstAmount).toLocaleString("en-IN")}</td>
                   <td className="px-4 py-3 text-sm font-semibold text-gray-900">₹{Number(inv.total).toLocaleString("en-IN")}</td>

@@ -4,6 +4,7 @@ import { authenticate, requireScope } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { fhirClient } from "../lib/fhirClient.js";
 import { aiClient } from "../lib/aiClient.js";
+import { asyncHandler } from "../lib/asyncHandler.js";
 
 export const patientsRouter = Router();
 
@@ -16,6 +17,7 @@ const CreatePatientSchema = z.object({
   name: z.string().min(2).max(100),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").optional(),
   gender: z.enum(["male", "female", "other"]).optional(),
+  bloodGroup: z.string().max(5).optional(),
   address: z.string().max(500).optional(),
   tags: z.array(z.string().max(50)).optional(),
 });
@@ -41,7 +43,7 @@ const ListQuerySchema = z.object({
 
 // ─── GET /api/patients ────────────────────────────────────────────────────────
 
-patientsRouter.get("/", requireScope("patients:read"), async (req, res) => {
+patientsRouter.get("/", requireScope("patients:read"), asyncHandler(async (req, res) => {
   const query = ListQuerySchema.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: query.error.flatten() });
@@ -54,6 +56,12 @@ patientsRouter.get("/", requireScope("patients:read"), async (req, res) => {
   const where = {
     createdByDoctorId: req.user!.doctor_id ?? req.user!.sub,
     ...(tag ? { tags: { some: { tag } } } : {}),
+    ...(search ? {
+      OR: [
+        { name: { contains: search, mode: "insensitive" as const } },
+        { phone: { contains: search } },
+      ],
+    } : {}),
   };
 
   const [total, patients] = await Promise.all([
@@ -65,7 +73,11 @@ patientsRouter.get("/", requireScope("patients:read"), async (req, res) => {
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
+        name: true,
         phone: true,
+        gender: true,
+        dateOfBirth: true,
+        bloodGroup: true,
         fhirPatientId: true,
         createdAt: true,
         tags: { select: { tag: true } },
@@ -77,18 +89,18 @@ patientsRouter.get("/", requireScope("patients:read"), async (req, res) => {
     data: patients,
     meta: { total, page, limit, pages: Math.ceil(total / limit) },
   });
-});
+}));
 
 // ─── POST /api/patients ───────────────────────────────────────────────────────
 
-patientsRouter.post("/", requireScope("patients:write"), async (req, res) => {
+patientsRouter.post("/", requireScope("patients:write"), asyncHandler(async (req, res) => {
   const result = CreatePatientSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
     return;
   }
 
-  const { phone, name, dateOfBirth, gender, address, tags } = result.data;
+  const { phone, name, dateOfBirth, gender, bloodGroup, address, tags } = result.data;
 
   const existing = await prisma.patient.findUnique({ where: { phone } });
   if (existing) {
@@ -103,6 +115,11 @@ patientsRouter.post("/", requireScope("patients:write"), async (req, res) => {
   const patient = await prisma.patient.create({
     data: {
       phone,
+      name,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+      gender,
+      bloodGroup,
+      address,
       fhirPatientId,
       createdByDoctorId: req.user!.doctor_id ?? req.user!.sub,
       tags: tags ? { create: tags.map((tag) => ({ tag })) } : undefined,
@@ -111,17 +128,17 @@ patientsRouter.post("/", requireScope("patients:write"), async (req, res) => {
   });
 
   res.status(201).json({ ...patient, fhirPatient });
-});
+}));
 
 // ─── GET /api/patients/:id ────────────────────────────────────────────────────
 
-patientsRouter.get("/:id", requireScope("patients:read"), async (req, res) => {
+patientsRouter.get("/:id", requireScope("patients:read"), asyncHandler(async (req, res) => {
   const patient = await prisma.patient.findUnique({
     where: { id: req.params["id"] },
     include: { tags: true },
   });
 
-  if (!patient) {
+  if (!patient || patient.createdByDoctorId !== (req.user!.doctor_id ?? req.user!.sub)) {
     res.status(404).json({ error: "Patient not found" });
     return;
   }
@@ -130,11 +147,11 @@ patientsRouter.get("/:id", requireScope("patients:read"), async (req, res) => {
   const fhirPatient = await fhirClient.getPatient(patient.fhirPatientId).catch(() => null);
 
   res.json({ ...patient, fhirPatient });
-});
+}));
 
 // ─── PATCH /api/patients/:id ──────────────────────────────────────────────────
 
-patientsRouter.patch("/:id", requireScope("patients:write"), async (req, res) => {
+patientsRouter.patch("/:id", requireScope("patients:write"), asyncHandler(async (req, res) => {
   const result = UpdatePatientSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -142,24 +159,33 @@ patientsRouter.patch("/:id", requireScope("patients:write"), async (req, res) =>
   }
 
   const patient = await prisma.patient.findUnique({ where: { id: req.params["id"] } });
-  if (!patient) {
+  if (!patient || patient.createdByDoctorId !== (req.user!.doctor_id ?? req.user!.sub)) {
     res.status(404).json({ error: "Patient not found" });
     return;
   }
 
-  const { tags, medicalHistory, ...fhirFields } = result.data;
+  const { tags, medicalHistory, name, dateOfBirth, gender, address, ...fhirFields } = result.data;
 
-  // Save medicalHistory if provided
-  if (medicalHistory !== undefined) {
+  // Save demographics + medical history locally
+  const localUpdate: Record<string, unknown> = {};
+  if (name !== undefined) localUpdate.name = name;
+  if (dateOfBirth !== undefined) localUpdate.dateOfBirth = new Date(dateOfBirth);
+  if (gender !== undefined) localUpdate.gender = gender;
+  if (address !== undefined) localUpdate.address = address;
+  if (medicalHistory !== undefined) localUpdate.medicalHistory = medicalHistory;
+
+  if (Object.keys(localUpdate).length > 0) {
     await prisma.patient.update({
       where: { id: patient.id },
-      data: { medicalHistory },
+      data: localUpdate,
     });
   }
 
   // Update FHIR Patient (best-effort)
-  if (Object.keys(fhirFields).length > 0) {
-    await fhirClient.updatePatient(patient.fhirPatientId, fhirFields).catch(() => null);
+  const allFhirFields = { name, dateOfBirth, gender, address, ...fhirFields };
+  const fhirFieldsToUpdate = Object.fromEntries(Object.entries(allFhirFields).filter(([, v]) => v !== undefined));
+  if (Object.keys(fhirFieldsToUpdate).length > 0) {
+    await fhirClient.updatePatient(patient.fhirPatientId, fhirFieldsToUpdate).catch(() => null);
   }
 
   // Update tags if provided
@@ -178,13 +204,13 @@ patientsRouter.patch("/:id", requireScope("patients:write"), async (req, res) =>
   });
 
   res.json(updated);
-});
+}));
 
 // ─── GET /api/patients/:id/timeline ──────────────────────────────────────────
 
-patientsRouter.get("/:id/timeline", requireScope("patients:read"), async (req, res) => {
+patientsRouter.get("/:id/timeline", requireScope("patients:read"), asyncHandler(async (req, res) => {
   const patient = await prisma.patient.findUnique({ where: { id: req.params["id"] } });
-  if (!patient) {
+  if (!patient || patient.createdByDoctorId !== (req.user!.doctor_id ?? req.user!.sub)) {
     res.status(404).json({ error: "Patient not found" });
     return;
   }
@@ -209,11 +235,11 @@ patientsRouter.get("/:id/timeline", requireScope("patients:read"), async (req, r
   ]);
 
   res.json({ consultations, labOrders });
-});
+}));
 
 // ─── POST /api/patients/:id/search — AI natural language record search ────────
 
-patientsRouter.post("/:id/search", requireScope("patients:read"), async (req, res) => {
+patientsRouter.post("/:id/search", requireScope("patients:read"), asyncHandler(async (req, res) => {
   const result = z.object({ query: z.string().min(3).max(500) }).safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -221,7 +247,7 @@ patientsRouter.post("/:id/search", requireScope("patients:read"), async (req, re
   }
 
   const patient = await prisma.patient.findUnique({ where: { id: req.params["id"] } });
-  if (!patient) {
+  if (!patient || patient.createdByDoctorId !== (req.user!.doctor_id ?? req.user!.sub)) {
     res.status(404).json({ error: "Patient not found" });
     return;
   }
@@ -232,4 +258,4 @@ patientsRouter.post("/:id/search", requireScope("patients:read"), async (req, re
   }).catch(() => null);
 
   res.json({ answer: answer ?? [], patientId: patient.id, query: result.data.query });
-});
+}));

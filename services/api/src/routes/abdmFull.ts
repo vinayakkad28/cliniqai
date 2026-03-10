@@ -309,7 +309,7 @@ router.post('/records/push', authenticate, async (req: Request, res: Response) =
 function verifyAbdmCallback(req: Request): boolean {
   // Verify HMAC signature from ABDM gateway
   const signature = req.headers['x-abdm-signature'] as string;
-  if (!signature) return process.env.NODE_ENV === 'development'; // Allow in dev
+  if (!signature) return process.env.NODE_ENV === 'development' && process.env.ALLOW_ABDM_DEV_BYPASS === 'true'; // Allow in dev only with explicit flag
 
   const expectedSignature = crypto
     .createHmac('sha256', process.env.ABDM_CLIENT_SECRET || '')

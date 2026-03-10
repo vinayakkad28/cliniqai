@@ -169,7 +169,7 @@ export const abdmClient = {
 };
 
 function encryptAadhaar(aadhaar: string): string {
-  if (process.env.NODE_ENV === 'development') return aadhaar;
+  if (process.env.NODE_ENV === 'development' && process.env.ALLOW_ABDM_DEV_BYPASS === 'true') return aadhaar;
   // RSA encrypt with ABDM public key
   const publicKey = process.env.ABDM_PUBLIC_KEY || '';
   if (!publicKey) return aadhaar;
@@ -177,7 +177,7 @@ function encryptAadhaar(aadhaar: string): string {
 }
 
 function encryptOtp(otp: string): string {
-  if (process.env.NODE_ENV === 'development') return otp;
+  if (process.env.NODE_ENV === 'development' && process.env.ALLOW_ABDM_DEV_BYPASS === 'true') return otp;
   const publicKey = process.env.ABDM_PUBLIC_KEY || '';
   if (!publicKey) return otp;
   return crypto.publicEncrypt(publicKey, Buffer.from(otp)).toString('base64');

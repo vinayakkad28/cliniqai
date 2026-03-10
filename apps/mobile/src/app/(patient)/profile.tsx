@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
+import { clearTokens } from '../../lib/auth';
 
 // ── Design tokens ───────────────────────────────────────────────────────────
 const PRIMARY = '#2563EB';
@@ -83,7 +84,7 @@ export default function PatientProfile() {
           text: 'Log Out',
           style: 'destructive',
           onPress: () => {
-            // TODO: Clear auth tokens and navigate to login
+            clearTokens();
             router.replace('/login');
           },
         },

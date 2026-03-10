@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authenticate, requireScope } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { emailReceiptQueue } from "../lib/queues.js";
+import { asyncHandler } from "../lib/asyncHandler.js";
 
 export const billingRouter = Router();
 
@@ -34,7 +35,7 @@ const ListInvoicesSchema = z.object({
 
 // ─── POST /api/billing/invoices ───────────────────────────────────────────────
 
-billingRouter.post("/invoices", requireScope("billing:write"), async (req, res) => {
+billingRouter.post("/invoices", requireScope("billing:write"), asyncHandler(async (req, res) => {
   const result = CreateInvoiceSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -72,11 +73,11 @@ billingRouter.post("/invoices", requireScope("billing:write"), async (req, res) 
   });
 
   res.status(201).json(invoice);
-});
+}));
 
 // ─── GET /api/billing/invoices ────────────────────────────────────────────────
 
-billingRouter.get("/invoices", requireScope("billing:read"), async (req, res) => {
+billingRouter.get("/invoices", requireScope("billing:read"), asyncHandler(async (req, res) => {
   const query = ListInvoicesSchema.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: query.error.flatten() });
@@ -93,8 +94,8 @@ billingRouter.get("/invoices", requireScope("billing:read"), async (req, res) =>
     ...(from || to
       ? {
           createdAt: {
-            ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
-            ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+            ...(from ? { gte: new Date(`${from}T00:00:00.000+05:30`) } : {}),
+            ...(to ? { lte: new Date(`${to}T23:59:59.999+05:30`) } : {}),
           },
         }
       : {}),
@@ -107,16 +108,16 @@ billingRouter.get("/invoices", requireScope("billing:read"), async (req, res) =>
       skip,
       take: limit,
       orderBy: { createdAt: "desc" },
-      include: { patient: { select: { id: true, phone: true } } },
+      include: { patient: { select: { id: true, name: true, phone: true } } },
     }),
   ]);
 
   res.json({ data: invoices, meta: { total, page, limit, pages: Math.ceil(total / limit) } });
-});
+}));
 
 // ─── GET /api/billing/invoices/export — CSV download ─────────────────────────
 
-billingRouter.get("/invoices/export", requireScope("billing:read"), async (req, res) => {
+billingRouter.get("/invoices/export", requireScope("billing:read"), asyncHandler(async (req, res) => {
   const { from, to, status } = z.object({
     from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -127,15 +128,15 @@ billingRouter.get("/invoices/export", requireScope("billing:read"), async (req, 
     doctorId: req.user!.doctor_id!,
     ...(status ? { status } : {}),
     ...(from || to ? { createdAt: {
-      ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
-      ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+      ...(from ? { gte: new Date(`${from}T00:00:00.000+05:30`) } : {}),
+      ...(to ? { lte: new Date(`${to}T23:59:59.999+05:30`) } : {}),
     } } : {}),
   };
 
   const invoices = await prisma.invoice.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    include: { patient: { select: { phone: true } } },
+    include: { patient: { select: { name: true, phone: true } } },
   });
 
   const lines = ["Date,Patient,Fees,GST,Total,Status,Payment Method,Paid At"];
@@ -155,30 +156,30 @@ billingRouter.get("/invoices/export", requireScope("billing:read"), async (req, 
   res.setHeader("Content-Type", "text/csv");
   res.setHeader("Content-Disposition", `attachment; filename="invoices-${Date.now()}.csv"`);
   res.send(lines.join("\n"));
-});
+}));
 
 // ─── GET /api/billing/invoices/:id ───────────────────────────────────────────
 
-billingRouter.get("/invoices/:id", requireScope("billing:read"), async (req, res) => {
+billingRouter.get("/invoices/:id", requireScope("billing:read"), asyncHandler(async (req, res) => {
   const invoice = await prisma.invoice.findUnique({
     where: { id: req.params["id"] },
     include: {
-      patient: { select: { id: true, phone: true } },
+      patient: { select: { id: true, name: true, phone: true } },
       paymentMethods: true,
     },
   });
 
-  if (!invoice) {
+  if (!invoice || invoice.doctorId !== req.user!.doctor_id) {
     res.status(404).json({ error: "Invoice not found" });
     return;
   }
 
   res.json(invoice);
-});
+}));
 
 // ─── PATCH /api/billing/invoices/:id — Mark payment ─────────────────────────
 
-billingRouter.patch("/invoices/:id", requireScope("billing:write"), async (req, res) => {
+billingRouter.patch("/invoices/:id", requireScope("billing:write"), asyncHandler(async (req, res) => {
   const result = MarkPaidSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -187,9 +188,9 @@ billingRouter.patch("/invoices/:id", requireScope("billing:write"), async (req, 
 
   const invoice = await prisma.invoice.findUnique({
     where: { id: req.params["id"] },
-    include: { patient: { select: { phone: true } } },
+    include: { patient: { select: { name: true, phone: true } } },
   });
-  if (!invoice) {
+  if (!invoice || invoice.doctorId !== req.user!.doctor_id) {
     res.status(404).json({ error: "Invoice not found" });
     return;
   }
@@ -228,11 +229,11 @@ billingRouter.patch("/invoices/:id", requireScope("billing:write"), async (req, 
   }
 
   res.json(updatedInvoice);
-});
+}));
 
 // ─── GET /api/billing/reports/revenue ────────────────────────────────────────
 
-billingRouter.get("/reports/revenue", requireScope("billing:read"), async (req, res) => {
+billingRouter.get("/reports/revenue", requireScope("billing:read"), asyncHandler(async (req, res) => {
   const { from, to } = z
     .object({
       from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -246,8 +247,8 @@ billingRouter.get("/reports/revenue", requireScope("billing:read"), async (req, 
     ...(from || to
       ? {
           paidAt: {
-            ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
-            ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+            ...(from ? { gte: new Date(`${from}T00:00:00.000+05:30`) } : {}),
+            ...(to ? { lte: new Date(`${to}T23:59:59.999+05:30`) } : {}),
           },
         }
       : {}),
@@ -266,11 +267,11 @@ billingRouter.get("/reports/revenue", requireScope("billing:read"), async (req, 
     invoiceCount: (result._count as { id?: number })?.id ?? 0,
     period: { from: from ?? null, to: to ?? null },
   });
-});
+}));
 
 // ─── GET /api/billing/reports/daily — Day-by-day revenue for sparkline ────────
 
-billingRouter.get("/reports/daily", requireScope("billing:read"), async (req, res) => {
+billingRouter.get("/reports/daily", requireScope("billing:read"), asyncHandler(async (req, res) => {
   const { days } = z.object({ days: z.coerce.number().int().min(1).max(90).default(30) }).parse(req.query);
 
   const from = new Date();
@@ -301,4 +302,4 @@ billingRouter.get("/reports/daily", requireScope("billing:read"), async (req, re
   }
 
   res.json({ days: byDate });
-});
+}));

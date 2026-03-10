@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useAuth } from "@/lib/auth";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { followups, type FollowUp } from "@/lib/api";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -9,17 +9,6 @@ type FollowupStatus = "pending" | "sent" | "acknowledged" | "cancelled";
 type Channel = "sms" | "whatsapp" | "email";
 type TabKey = "due_today" | "this_week" | "all" | "overdue";
 type ViewMode = "list" | "calendar";
-
-interface Followup {
-  id: string;
-  patientName: string;
-  patientPhone: string;
-  reason: string;
-  scheduledDate: string;
-  channel: Channel;
-  status: FollowupStatus;
-  consultationId?: string;
-}
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 
@@ -43,61 +32,6 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "overdue", label: "Overdue" },
 ];
 
-// ─── Mock data ──────────────────────────────────────────────────────────────
-
-const MOCK_NAMES = [
-  "Ramesh K.", "Sunita D.", "Arjun M.", "Priya S.", "Vikram R.", "Anita D.",
-  "Kavita R.", "Suresh K.", "Deepa I.", "Meena P.", "Rajesh T.", "Lakshmi N.",
-  "Arun B.", "Neha G.", "Sanjay P.", "Pooja V.",
-];
-
-const MOCK_REASONS = [
-  "3-month diabetes checkup — HbA1c review",
-  "Monthly BP monitoring and medication review",
-  "Bi-monthly asthma control assessment",
-  "Post-antibiotic follow-up for UTI",
-  "2-week follow-up for pain management review",
-  "Monthly mental health follow-up",
-  "Quarterly thyroid function test review",
-  "2-week follow-up to assess symptom resolution",
-  "Follow-up if symptoms persist after 7 days",
-  "Monthly allergy management review",
-];
-
-function generateMockFollowups(): Followup[] {
-  const entries: Followup[] = [];
-  const now = new Date();
-  const channels: Channel[] = ["sms", "whatsapp", "email"];
-  const statuses: FollowupStatus[] = ["pending", "sent", "acknowledged", "cancelled"];
-
-  for (let i = 0; i < 50; i++) {
-    const daysOffset = Math.floor(Math.random() * 30) - 5; // -5 to +25 days from today
-    const scheduled = new Date(now);
-    scheduled.setDate(scheduled.getDate() + daysOffset);
-    scheduled.setHours(9 + Math.floor(Math.random() * 9), 0, 0, 0);
-
-    // Overdue items are mostly pending; future items are mostly pending
-    let status: FollowupStatus;
-    if (daysOffset < 0) {
-      status = Math.random() < 0.6 ? "pending" : statuses[Math.floor(Math.random() * statuses.length)]!;
-    } else {
-      status = Math.random() < 0.7 ? "pending" : statuses[Math.floor(Math.random() * statuses.length)]!;
-    }
-
-    entries.push({
-      id: `fu-${i.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-      patientName: MOCK_NAMES[Math.floor(Math.random() * MOCK_NAMES.length)]!,
-      patientPhone: `+91 ${Math.floor(7000000000 + Math.random() * 2999999999)}`,
-      reason: MOCK_REASONS[Math.floor(Math.random() * MOCK_REASONS.length)]!,
-      scheduledDate: scheduled.toISOString(),
-      channel: channels[Math.floor(Math.random() * channels.length)]!,
-      status,
-    });
-  }
-
-  return entries.sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
-}
-
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function startOfDay(d: Date): Date {
@@ -115,14 +49,15 @@ function isSameDay(a: Date, b: Date): boolean {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function FollowupsPage() {
-  const { token } = useAuth();
-
-  const [followups, setFollowups] = useState<Followup[]>(() => generateMockFollowups());
+  const [allFollowups, setAllFollowups] = useState<FollowUp[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("due_today");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [autoGenerating, setAutoGenerating] = useState(false);
   const [sendingAll, setSendingAll] = useState(false);
+  const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState<{ total: number; pages: number }>({ total: 0, pages: 1 });
 
   const now = new Date();
   const todayStart = startOfDay(now);
@@ -130,33 +65,50 @@ export default function FollowupsPage() {
   const weekEnd = new Date(todayStart);
   weekEnd.setDate(weekEnd.getDate() + 7);
 
+  const fetchFollowups = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await followups.list({ page, limit: 100 });
+      setAllFollowups(result.data);
+      setMeta({ total: result.meta.total, pages: result.meta.pages });
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  }, [page]);
+
+  useEffect(() => {
+    fetchFollowups();
+  }, [fetchFollowups]);
+
   const tabFiltered = useMemo(() => {
     switch (activeTab) {
       case "due_today":
-        return followups.filter(
+        return allFollowups.filter(
           (f) => f.status === "pending" && new Date(f.scheduledDate) >= todayStart && new Date(f.scheduledDate) <= todayEnd
         );
       case "this_week":
-        return followups.filter(
+        return allFollowups.filter(
           (f) => f.status === "pending" && new Date(f.scheduledDate) >= todayStart && new Date(f.scheduledDate) < weekEnd
         );
       case "overdue":
-        return followups.filter(
+        return allFollowups.filter(
           (f) => f.status === "pending" && new Date(f.scheduledDate) < todayStart
         );
       case "all":
       default:
-        return followups;
+        return allFollowups;
     }
-  }, [followups, activeTab]);
+  }, [allFollowups, activeTab]);
 
   // Tab counts
   const counts = useMemo(() => ({
-    due_today: followups.filter((f) => f.status === "pending" && new Date(f.scheduledDate) >= todayStart && new Date(f.scheduledDate) <= todayEnd).length,
-    this_week: followups.filter((f) => f.status === "pending" && new Date(f.scheduledDate) >= todayStart && new Date(f.scheduledDate) < weekEnd).length,
-    all: followups.length,
-    overdue: followups.filter((f) => f.status === "pending" && new Date(f.scheduledDate) < todayStart).length,
-  }), [followups]);
+    due_today: allFollowups.filter((f) => f.status === "pending" && new Date(f.scheduledDate) >= todayStart && new Date(f.scheduledDate) <= todayEnd).length,
+    this_week: allFollowups.filter((f) => f.status === "pending" && new Date(f.scheduledDate) >= todayStart && new Date(f.scheduledDate) < weekEnd).length,
+    all: allFollowups.length,
+    overdue: allFollowups.filter((f) => f.status === "pending" && new Date(f.scheduledDate) < todayStart).length,
+  }), [allFollowups]);
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -175,69 +127,56 @@ export default function FollowupsPage() {
     }
   }
 
-  function handleSendAllDue() {
+  async function handleMarkSent(id: string) {
+    setUpdatingIds((prev) => new Set(prev).add(id));
+    try {
+      await followups.update(id, { status: "sent" });
+      setAllFollowups((prev) => prev.map((f) => (f.id === id ? { ...f, status: "sent" as const } : f)));
+    } catch {
+      // silently fail
+    } finally {
+      setUpdatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  }
+
+  async function handleSendAllDue() {
     setSendingAll(true);
-    setTimeout(() => {
-      setFollowups((prev) =>
+    const dueToday = allFollowups.filter(
+      (f) => f.status === "pending" && new Date(f.scheduledDate) >= todayStart && new Date(f.scheduledDate) <= todayEnd
+    );
+    try {
+      await Promise.all(dueToday.map((f) => followups.update(f.id, { status: "sent" })));
+      setAllFollowups((prev) =>
         prev.map((f) => {
           if (f.status === "pending" && new Date(f.scheduledDate) >= todayStart && new Date(f.scheduledDate) <= todayEnd) {
-            return { ...f, status: "sent" as FollowupStatus };
+            return { ...f, status: "sent" as const };
           }
           return f;
         })
       );
-      setSendingAll(false);
       setSelectedIds(new Set());
-    }, 1000);
+    } catch {
+      // silently fail
+    } finally {
+      setSendingAll(false);
+    }
   }
 
-  function handleCancelSelected() {
-    setFollowups((prev) =>
-      prev.map((f) => (selectedIds.has(f.id) ? { ...f, status: "cancelled" as FollowupStatus } : f))
-    );
+  async function handleCancelSelected() {
+    const ids = Array.from(selectedIds);
+    try {
+      await Promise.all(ids.map((id) => followups.update(id, { status: "cancelled" })));
+      setAllFollowups((prev) =>
+        prev.map((f) => (selectedIds.has(f.id) ? { ...f, status: "cancelled" as const } : f))
+      );
+    } catch {
+      // silently fail
+    }
     setSelectedIds(new Set());
-  }
-
-  function handleAutoGenerate() {
-    setAutoGenerating(true);
-    // Simulate API call
-    setTimeout(() => {
-      const newEntries: Followup[] = [
-        {
-          id: `fu-auto-${Math.random().toString(36).slice(2, 8)}`,
-          patientName: "Ramesh K.",
-          patientPhone: "+91 9876543210",
-          reason: "3-month diabetes checkup — HbA1c review",
-          scheduledDate: new Date(Date.now() + 90 * 86400000).toISOString(),
-          channel: "whatsapp",
-          status: "pending",
-        },
-        {
-          id: `fu-auto-${Math.random().toString(36).slice(2, 8)}`,
-          patientName: "Sunita D.",
-          patientPhone: "+91 9876543211",
-          reason: "Monthly BP monitoring and medication review",
-          scheduledDate: new Date(Date.now() + 30 * 86400000).toISOString(),
-          channel: "sms",
-          status: "pending",
-        },
-        {
-          id: `fu-auto-${Math.random().toString(36).slice(2, 8)}`,
-          patientName: "Arjun M.",
-          patientPhone: "+91 9876543212",
-          reason: "Post-antibiotic follow-up for UTI",
-          scheduledDate: new Date(Date.now() + 7 * 86400000).toISOString(),
-          channel: "whatsapp",
-          status: "pending",
-        },
-      ];
-      setFollowups((prev) => [...prev, ...newEntries].sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()));
-      setAutoGenerating(false);
-    }, 1500);
-  }
-
-  function handleMarkSent(id: string) {
-    setFollowups((prev) => prev.map((f) => (f.id === id ? { ...f, status: "sent" as FollowupStatus } : f)));
   }
 
   // ─── Calendar view data ─────────────────────────────────────────────────
@@ -251,14 +190,14 @@ export default function FollowupsPage() {
     const dayCounts: { date: Date; count: number; isToday: boolean }[] = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(now.getFullYear(), now.getMonth(), d);
-      const count = followups.filter(
+      const count = allFollowups.filter(
         (f) => f.status === "pending" && isSameDay(new Date(f.scheduledDate), date)
       ).length;
       dayCounts.push({ date, count, isToday: isSameDay(date, now) });
     }
 
     return { startDay, dayCounts, monthLabel: now.toLocaleDateString("en-IN", { month: "long", year: "numeric" }) };
-  }, [followups]);
+  }, [allFollowups]);
 
   return (
     <div className="p-6 space-y-6">
@@ -288,14 +227,6 @@ export default function FollowupsPage() {
               Calendar
             </button>
           </div>
-
-          <button
-            onClick={handleAutoGenerate}
-            disabled={autoGenerating}
-            className="rounded-lg bg-gradient-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {autoGenerating ? "Generating..." : "Auto-Generate"}
-          </button>
         </div>
       </div>
 
@@ -414,100 +345,124 @@ export default function FollowupsPage() {
       {/* List View */}
       {viewMode === "list" && (
         <div className="cliniq-card-elevated overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead>
-                <tr className="bg-primary-900 text-white">
-                  <th className="px-4 py-3 text-left">
-                    <input
-                      type="checkbox"
-                      checked={tabFiltered.length > 0 && selectedIds.size === tabFiltered.length}
-                      onChange={toggleSelectAll}
-                      className="rounded border-white/30"
-                    />
-                  </th>
-                  {["Patient", "Reason", "Scheduled Date", "Channel", "Status", "Actions"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
-                      {h}
+          {loading ? (
+            <div className="py-20 text-center text-sm text-slate-400">Loading...</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead>
+                  <tr className="bg-primary-900 text-white">
+                    <th className="px-4 py-3 text-left">
+                      <input
+                        type="checkbox"
+                        checked={tabFiltered.length > 0 && selectedIds.size === tabFiltered.length}
+                        onChange={toggleSelectAll}
+                        className="rounded border-white/30"
+                      />
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {tabFiltered.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-16 text-center text-sm text-slate-400">
-                      No follow-ups in this view.
-                    </td>
+                    {["Patient", "Reason", "Scheduled Date", "Channel", "Status", "Actions"].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ) : (
-                  tabFiltered.map((fu) => {
-                    const sCfg = STATUS_CONFIG[fu.status];
-                    const cCfg = CHANNEL_CONFIG[fu.channel];
-                    const isOverdue = fu.status === "pending" && new Date(fu.scheduledDate) < todayStart;
-                    return (
-                      <tr
-                        key={fu.id}
-                        className={`hover:bg-slate-50 transition-colors ${isOverdue ? "bg-red-50/50" : ""}`}
-                      >
-                        <td className="px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(fu.id)}
-                            onChange={() => toggleSelect(fu.id)}
-                            className="rounded border-slate-300"
-                          />
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="text-sm font-medium text-slate-800">{fu.patientName}</div>
-                          <div className="text-xs text-slate-400">{fu.patientPhone}</div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-600 max-w-xs truncate" title={fu.reason}>
-                          {fu.reason}
-                        </td>
-                        <td className="px-4 py-3 text-sm whitespace-nowrap">
-                          <span className={isOverdue ? "text-red-600 font-medium" : "text-slate-600"}>
-                            {new Date(fu.scheduledDate).toLocaleDateString("en-IN", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </span>
-                          {isOverdue && (
-                            <span className="ml-1.5 text-xs text-red-500 font-medium">Overdue</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="cliniq-badge bg-slate-100 text-slate-600 text-xs">
-                            {cCfg.icon} {cCfg.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`cliniq-badge ${sCfg.bg} ${sCfg.text} text-xs font-semibold`}>
-                            {sCfg.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          {fu.status === "pending" && (
-                            <button
-                              onClick={() => handleMarkSent(fu.id)}
-                              className="text-xs text-primary-600 hover:text-primary-800 font-medium hover:underline"
-                            >
-                              Mark Sent
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {tabFiltered.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-16 text-center text-sm text-slate-400">
+                        No follow-ups in this view.
+                      </td>
+                    </tr>
+                  ) : (
+                    tabFiltered.map((fu) => {
+                      const sCfg = STATUS_CONFIG[fu.status as FollowupStatus] ?? STATUS_CONFIG.pending;
+                      const cCfg = CHANNEL_CONFIG[fu.channel as Channel] ?? CHANNEL_CONFIG.sms;
+                      const isOverdue = fu.status === "pending" && new Date(fu.scheduledDate) < todayStart;
+                      return (
+                        <tr
+                          key={fu.id}
+                          className={`hover:bg-slate-50 transition-colors ${isOverdue ? "bg-red-50/50" : ""}`}
+                        >
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(fu.id)}
+                              onChange={() => toggleSelect(fu.id)}
+                              className="rounded border-slate-300"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="text-sm font-medium text-slate-800">{fu.patientName || "Unknown"}</div>
+                            <div className="text-xs text-slate-400">{fu.patientPhone || ""}</div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600 max-w-xs truncate" title={fu.reason}>
+                            {fu.reason}
+                          </td>
+                          <td className="px-4 py-3 text-sm whitespace-nowrap">
+                            <span className={isOverdue ? "text-red-600 font-medium" : "text-slate-600"}>
+                              {new Date(fu.scheduledDate).toLocaleDateString("en-IN", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </span>
+                            {isOverdue && (
+                              <span className="ml-1.5 text-xs text-red-500 font-medium">Overdue</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="cliniq-badge bg-slate-100 text-slate-600 text-xs">
+                              {cCfg.icon} {cCfg.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`cliniq-badge ${sCfg.bg} ${sCfg.text} text-xs font-semibold`}>
+                              {sCfg.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {fu.status === "pending" && (
+                              <button
+                                onClick={() => handleMarkSent(fu.id)}
+                                disabled={updatingIds.has(fu.id)}
+                                className="text-xs text-primary-600 hover:text-primary-800 font-medium hover:underline disabled:opacity-50"
+                              >
+                                {updatingIds.has(fu.id) ? "Saving..." : "Mark Sent"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-400">
             <span>{tabFiltered.length} follow-up{tabFiltered.length !== 1 ? "s" : ""}</span>
+            {meta.pages > 1 && (
+              <div className="flex gap-2">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="rounded px-2 py-1 disabled:opacity-40 hover:bg-slate-100"
+                >
+                  Prev
+                </button>
+                <span>Page {page} / {meta.pages}</span>
+                <button
+                  disabled={page >= meta.pages}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="rounded px-2 py-1 disabled:opacity-40 hover:bg-slate-100"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

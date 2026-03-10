@@ -11,22 +11,60 @@ function getToken(): string | null {
   return localStorage.getItem("cliniqai_access_token");
 }
 
+let refreshPromise: Promise<void> | null = null;
+
 async function request<T>(
   method: string,
   path: string,
   body?: unknown,
   headers?: Record<string, string>
 ): Promise<T> {
-  const token = getToken();
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
+  const doRequest = async (): Promise<Response> => {
+    const token = getToken();
+    return fetch(`${BASE}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+  };
+
+  let res = await doRequest();
+
+  // On 401, attempt token refresh once
+  if (res.status === 401 && path !== "/auth/refresh" && path !== "/auth/login") {
+    if (!refreshPromise) {
+      refreshPromise = (async () => {
+        const refreshToken = typeof window !== "undefined" ? localStorage.getItem("cliniqai_refresh_token") : null;
+        if (!refreshToken) throw new Error("No refresh token");
+        try {
+          const refreshRes = await fetch(`${BASE}/auth/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refreshToken }),
+          });
+          if (!refreshRes.ok) throw new Error("Refresh failed");
+          const data = await refreshRes.json();
+          localStorage.setItem("cliniqai_access_token", data.accessToken);
+          if (data.refreshToken) localStorage.setItem("cliniqai_refresh_token", data.refreshToken);
+        } catch {
+          localStorage.removeItem("cliniqai_access_token");
+          localStorage.removeItem("cliniqai_refresh_token");
+          if (typeof window !== "undefined") window.location.href = "/login";
+          throw new Error("Session expired");
+        }
+      })().finally(() => { refreshPromise = null; });
+    }
+    try {
+      await refreshPromise;
+      res = await doRequest();
+    } catch {
+      // refresh failed, throw original 401
+    }
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -57,6 +95,9 @@ export const auth = {
 
   refresh: (refreshToken: string) =>
     request<Pick<AuthTokens, "accessToken" | "refreshToken">>("POST", "/auth/refresh", { refreshToken }),
+
+  register: (data: { phone: string; name: string; licenseNumber: string; email?: string }) =>
+    request<{ message: string; userId: string; dev_otp?: string }>("POST", "/auth/register", data),
 
   logout: (refreshToken?: string) =>
     request<{ message: string }>("POST", "/auth/logout", refreshToken ? { refreshToken } : {}),
@@ -120,6 +161,7 @@ export interface MedicalHistory {
 export interface Patient {
   id: string;
   phone: string;
+  name?: string | null;
   fhirPatientId: string;
   tags: { tag: string }[];
   createdAt: string;
@@ -160,6 +202,7 @@ export interface Appointment {
   status: string;
   type: string;
   notes: string | null;
+  patient?: { id: string; phone: string; name?: string | null };
 }
 
 export interface AppointmentListResponse {
@@ -469,5 +512,22 @@ export const abdm = {
     request<{ success: boolean; transactionId: string }>("POST", "/abdm-v2/records/push", data),
 };
 
+// ─── Analytics ──────────────────────────────────────────────────────────────
+
+export interface AnalyticsSummary {
+  totalPatients: number;
+  totalConsultations: number;
+  totalRevenue: number;
+  avgConsultationDuration: number;
+  topDiagnoses: { diagnosis: string; count: number }[];
+  appointmentsByType: { type: string; count: number }[];
+  consultationsByHour: { hour: number; count: number }[];
+}
+
+export const analytics = {
+  summary: (days = 30) =>
+    request<AnalyticsSummary>("GET", `/analytics/summary?days=${days}`),
+};
+
 // Unified API namespace for pages that import { api }
-export const api = { auth, doctors, staff, patients, appointments, consultations, billing, clinic, documents, labs, pharmacy, prescriptions, pharmacyQueue, telemedicine, insights, followups, auditLog, abdm };
+export const api = { auth, doctors, staff, patients, appointments, consultations, billing, clinic, documents, labs, pharmacy, prescriptions, pharmacyQueue, telemedicine, insights, followups, auditLog, abdm, analytics };

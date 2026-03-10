@@ -6,28 +6,36 @@ import Link from "next/link";
 import { auth } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-type Step = "phone" | "otp";
+type Step = "form" | "otp";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
   const { login } = useAuth();
 
-  const [step, setStep] = useState<Step>("phone");
+  const [step, setStep] = useState<Step>("form");
+  const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [licenseNumber, setLicenseNumber] = useState("");
+  const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSendOtp(e: React.FormEvent) {
+  async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      const res = await auth.sendOtp(phone);
+      const res = await auth.register({
+        phone,
+        name,
+        licenseNumber,
+        ...(email ? { email } : {}),
+      });
       if (res.dev_otp) setOtp(res.dev_otp); // auto-fill in dev mode
       setStep("otp");
     } catch (err: unknown) {
-      setError((err as Error).message ?? "Failed to send OTP");
+      setError((err as Error).message ?? "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -43,6 +51,19 @@ export default function LoginPage() {
       router.replace("/dashboard");
     } catch (err: unknown) {
       setError((err as Error).message ?? "Invalid OTP");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResendOtp() {
+    setError("");
+    setLoading(true);
+    try {
+      const res = await auth.sendOtp(phone);
+      if (res.dev_otp) setOtp(res.dev_otp);
+    } catch (err: unknown) {
+      setError((err as Error).message ?? "Failed to resend OTP");
     } finally {
       setLoading(false);
     }
@@ -67,11 +88,25 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary-700 to-primary-500 bg-clip-text text-transparent">
             CliniqAI
           </h1>
-          <p className="mt-1 text-sm text-slate-500">AI-powered clinical platform for doctors</p>
+          <p className="mt-1 text-sm text-slate-500">Register as a new doctor</p>
         </div>
 
-        {step === "phone" ? (
-          <form onSubmit={handleSendOtp} className="space-y-4">
+        {step === "form" ? (
+          <form onSubmit={handleRegister} className="space-y-4">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Full Name
+              </label>
+              <input
+                id="name"
+                type="text"
+                required
+                placeholder="Dr. Priya Sharma"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="cliniq-input"
+              />
+            </div>
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-slate-700 mb-1.5">
                 Mobile Number
@@ -86,6 +121,33 @@ export default function LoginPage() {
                 className="cliniq-input text-center text-lg tracking-wide"
               />
             </div>
+            <div>
+              <label htmlFor="licenseNumber" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Medical License Number (MCI/NMC)
+              </label>
+              <input
+                id="licenseNumber"
+                type="text"
+                required
+                placeholder="e.g. MCI-12345"
+                value={licenseNumber}
+                onChange={(e) => setLicenseNumber(e.target.value)}
+                className="cliniq-input"
+              />
+            </div>
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Email <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <input
+                id="email"
+                type="email"
+                placeholder="doctor@clinic.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="cliniq-input"
+              />
+            </div>
             {error && (
               <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2">
                 <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -95,8 +157,14 @@ export default function LoginPage() {
               </div>
             )}
             <button type="submit" disabled={loading} className="cliniq-btn-primary w-full">
-              {loading ? "Sending OTP…" : "Send OTP"}
+              {loading ? "Registering..." : "Register & Send OTP"}
             </button>
+            <p className="text-center text-sm text-slate-500">
+              Already registered?{" "}
+              <Link href="/login" className="text-primary-600 font-medium hover:underline">
+                Login here
+              </Link>
+            </p>
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
@@ -105,7 +173,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 className="text-primary-600 font-medium hover:underline"
-                onClick={() => { setStep("phone"); setOtp(""); setError(""); }}
+                onClick={() => { setStep("form"); setOtp(""); setError(""); }}
               >
                 Change
               </button>
@@ -137,25 +205,18 @@ export default function LoginPage() {
               disabled={loading || otp.length !== 6}
               className="cliniq-btn-primary w-full"
             >
-              {loading ? "Verifying…" : "Verify & Login"}
+              {loading ? "Verifying..." : "Verify & Continue"}
             </button>
             <button
               type="button"
               disabled={loading}
-              onClick={handleSendOtp}
+              onClick={handleResendOtp}
               className="w-full text-sm text-slate-500 hover:text-primary-600 transition-colors disabled:opacity-60"
             >
               Resend OTP
             </button>
           </form>
         )}
-
-        <p className="mt-4 text-center text-sm text-slate-500">
-          New doctor?{" "}
-          <Link href="/register" className="text-primary-600 font-medium hover:underline">
-            Register here
-          </Link>
-        </p>
 
         <p className="mt-6 text-center text-2xs text-slate-400">
           Secured with end-to-end encryption. HIPAA & DPDP compliant.

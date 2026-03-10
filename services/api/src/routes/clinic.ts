@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { authenticate } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
+import { asyncHandler } from "../lib/asyncHandler.js";
 
 export const clinicRouter = Router();
 
@@ -15,7 +16,7 @@ const PatchClinicSchema = z.object({
 });
 
 // GET /api/clinic/me — returns the doctor's clinic or null
-clinicRouter.get("/me", async (req, res) => {
+clinicRouter.get("/me", asyncHandler(async (req, res) => {
   const doctorId = req.user!.doctor_id;
   if (!doctorId) {
     res.status(403).json({ error: "Doctor profile required" });
@@ -28,10 +29,10 @@ clinicRouter.get("/me", async (req, res) => {
   });
 
   res.json(link?.clinic ?? null);
-});
+}));
 
 // PATCH /api/clinic/me — upsert the doctor's clinic
-clinicRouter.patch("/me", async (req, res) => {
+clinicRouter.patch("/me", asyncHandler(async (req, res) => {
   const doctorId = req.user!.doctor_id;
   if (!doctorId) {
     res.status(403).json({ error: "Doctor profile required" });
@@ -79,4 +80,4 @@ clinicRouter.patch("/me", async (req, res) => {
   }
 
   res.json(clinic);
-});
+}));

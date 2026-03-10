@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { fhirClient } from "../lib/fhirClient.js";
 import { aiClient } from "../lib/aiClient.js";
 import { whatsappPrescriptionQueue, smsReminderQueue } from "../lib/queues.js";
+import { asyncHandler } from "../lib/asyncHandler.js";
 
 export const prescriptionsRouter = Router();
 
@@ -29,7 +30,7 @@ const CreatePrescriptionSchema = z.object({
 
 // ─── POST /api/prescriptions ─────────────────────────────────────────────────
 
-prescriptionsRouter.post("/", requireScope("prescriptions:write"), async (req, res) => {
+prescriptionsRouter.post("/", requireScope("prescriptions:write"), asyncHandler(async (req, res) => {
   const result = CreatePrescriptionSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -86,6 +87,7 @@ prescriptionsRouter.post("/", requireScope("prescriptions:write"), async (req, r
       consultationId,
       patientId: consultation.patientId,
       doctorId: req.user!.doctor_id!,
+      medications: medications as unknown as any,
       fhirMedicationRequestId: fhirMedReq?.id ?? null,
       sentVia: sendVia !== "none" ? sendVia : null,
       sentAt: sendVia !== "none" ? now : null,
@@ -120,11 +122,11 @@ prescriptionsRouter.post("/", requireScope("prescriptions:write"), async (req, r
     ddiAlerts: ddiAlerts.filter((a) => a.severity !== "major"),
     majorAlertsAcknowledged: acknowledgeDdi && majorAlerts.length > 0,
   });
-});
+}));
 
 // ─── GET /api/prescriptions/:id ──────────────────────────────────────────────
 
-prescriptionsRouter.get("/:id", requireScope("prescriptions:read"), async (req, res) => {
+prescriptionsRouter.get("/:id", requireScope("prescriptions:read"), asyncHandler(async (req, res) => {
   const prescription = await prisma.prescription.findUnique({
     where: { id: req.params["id"] },
     include: {
@@ -133,17 +135,17 @@ prescriptionsRouter.get("/:id", requireScope("prescriptions:read"), async (req, 
     },
   });
 
-  if (!prescription) {
+  if (!prescription || prescription.doctorId !== req.user!.doctor_id) {
     res.status(404).json({ error: "Prescription not found" });
     return;
   }
 
   res.json(prescription);
-});
+}));
 
 // ─── POST /api/prescriptions/:id/send ────────────────────────────────────────
 
-prescriptionsRouter.post("/:id/send", requireScope("prescriptions:write"), async (req, res) => {
+prescriptionsRouter.post("/:id/send", requireScope("prescriptions:write"), asyncHandler(async (req, res) => {
   const bodyResult = z.object({ via: z.enum(["whatsapp", "sms"]) }).safeParse(req.body);
   if (!bodyResult.success) {
     res.status(400).json({ error: bodyResult.error.flatten() });
@@ -157,7 +159,7 @@ prescriptionsRouter.post("/:id/send", requireScope("prescriptions:write"), async
       doctor: { select: { name: true } },
     },
   });
-  if (!prescription) {
+  if (!prescription || prescription.doctorId !== req.user!.doctor_id) {
     res.status(404).json({ error: "Prescription not found" });
     return;
   }
@@ -172,7 +174,7 @@ prescriptionsRouter.post("/:id/send", requireScope("prescriptions:write"), async
       prescriptionId: prescription.id,
       patientPhone: prescription.patient.phone,
       doctorName: prescription.doctor.name,
-      medications: [],
+      medications: (prescription.medications as any[]) ?? [],
     }).catch(() => {}); // fire-and-forget
   } else {
     smsReminderQueue.add({
@@ -184,4 +186,4 @@ prescriptionsRouter.post("/:id/send", requireScope("prescriptions:write"), async
   }
 
   res.json({ message: `Prescription queued for delivery via ${bodyResult.data.via}` });
-});
+}));

@@ -8,8 +8,8 @@ const clients = new Map<string, Response>();
 
 // SSE endpoint for real-time updates
 router.get('/stream', authenticate, (req: Request, res: Response) => {
-  const doctorId = (req as any).auth.doctor_id;
-  const clinicId = (req as any).auth.clinic_id;
+  const doctorId = req.user!.doctor_id;
+  const clinicId = req.user!.clinic_id;
   const clientId = `${doctorId}-${Date.now()}`;
 
   // Set SSE headers

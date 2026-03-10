@@ -1,65 +1,18 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
+import QRCode from 'qrcode';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
 // ─── QR Code SVG Generator ─────────────────────────────────────────────────
-// Minimal QR-like SVG generator: encodes data as a base64 data matrix rendered
-// as an SVG. This avoids any npm dependency. For production use, a proper QR
-// library (e.g. qrcode) is recommended.
 
-function generateQRCodeSVG(data: string, size = 200): string {
-  // Create a deterministic bit matrix from the data hash
-  const hash = crypto.createHash('sha256').update(data).digest('hex');
-  const modules = 21; // 21x21 is Version 1 QR grid size
-  const cellSize = size / modules;
-
-  // Build a pseudo-QR matrix from the hash bytes
-  const matrix: boolean[][] = [];
-  for (let row = 0; row < modules; row++) {
-    matrix[row] = [];
-    for (let col = 0; col < modules; col++) {
-      const idx = (row * modules + col) % hash.length;
-      const val = parseInt(hash[idx], 16);
-      matrix[row][col] = val >= 8; // threshold at midpoint
-    }
-  }
-
-  // Add finder patterns (the three large squares in QR codes)
-  addFinderPattern(matrix, 0, 0);
-  addFinderPattern(matrix, 0, modules - 7);
-  addFinderPattern(matrix, modules - 7, 0);
-
-  // Build SVG
-  let rects = '';
-  for (let row = 0; row < modules; row++) {
-    for (let col = 0; col < modules; col++) {
-      if (matrix[row][col]) {
-        rects += `<rect x="${col * cellSize}" y="${row * cellSize}" width="${cellSize}" height="${cellSize}" fill="#000"/>`;
-      }
-    }
-  }
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
-<rect width="${size}" height="${size}" fill="#fff"/>
-${rects}
-</svg>`;
+async function generateQRCodeSVG(data: string, size = 200): Promise<string> {
+  return QRCode.toString(data, { type: 'svg', width: size, margin: 1 });
 }
 
-function addFinderPattern(matrix: boolean[][], startRow: number, startCol: number): void {
-  // 7x7 finder pattern
-  for (let r = 0; r < 7; r++) {
-    for (let c = 0; c < 7; c++) {
-      const isOuter = r === 0 || r === 6 || c === 0 || c === 6;
-      const isInner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
-      matrix[startRow + r][startCol + c] = isOuter || isInner;
-    }
-  }
-}
-
-function qrSvgToDataUrl(svg: string): string {
+async function qrSvgToDataUrl(svg: string): Promise<string> {
   const base64 = Buffer.from(svg).toString('base64');
   return `data:image/svg+xml;base64,${base64}`;
 }
@@ -67,7 +20,14 @@ function qrSvgToDataUrl(svg: string): string {
 // ─── Digital Signature Helpers ──────────────────────────────────────────────
 
 function getSigningKey(): string {
-  return process.env.ENCRYPTION_KEY || 'default-key';
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key || key === 'default-key') {
+    if (process.env.NODE_ENV !== 'development') {
+      throw new Error('ENCRYPTION_KEY must be set in production');
+    }
+    return 'default-dev-key';
+  }
+  return key;
 }
 
 function createDigitalSignature(payload: Record<string, unknown>): string {
@@ -88,7 +48,7 @@ function verifyDigitalSignature(payload: Record<string, unknown>, signature: str
 router.post('/:prescriptionId/generate', authenticate, async (req: Request, res: Response) => {
   try {
     const { prescriptionId } = req.params;
-    const doctorId = (req as any).auth.doctor_id;
+    const doctorId = req.user!.doctor_id;
 
     const prescription = await prisma.prescription.findUnique({
       where: { id: prescriptionId },
@@ -143,8 +103,8 @@ router.post('/:prescriptionId/generate', authenticate, async (req: Request, res:
     };
 
     const qrDataString = JSON.stringify(qrPayload);
-    const qrSvg = generateQRCodeSVG(qrDataString);
-    const qrDataUrl = qrSvgToDataUrl(qrSvg);
+    const qrSvg = await generateQRCodeSVG(qrDataString);
+    const qrDataUrl = await qrSvgToDataUrl(qrSvg);
 
     // PDF-ready data structure
     const pdfData = {
@@ -331,7 +291,7 @@ router.get('/verify/code/:code', async (req: Request, res: Response) => {
 router.post('/:prescriptionId/share/whatsapp', authenticate, async (req: Request, res: Response) => {
   try {
     const { prescriptionId } = req.params;
-    const doctorId = (req as any).auth.doctor_id;
+    const doctorId = req.user!.doctor_id;
     const { recipientPhone } = req.body;
 
     const prescription = await prisma.prescription.findUnique({
