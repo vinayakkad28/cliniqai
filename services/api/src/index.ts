@@ -32,6 +32,16 @@ import auditLogRouter from "./routes/auditLog.js";
 import { tracingMiddleware } from "./lib/monitoring.js";
 import { healthCheck } from "./lib/monitoring.js";
 
+// Production environment validation
+if (process.env.NODE_ENV !== 'development') {
+  const required = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'DATABASE_URL'];
+  const missing = required.filter(k => !process.env[k] || process.env[k]!.includes('your-') || process.env[k]!.includes('change-me'));
+  if (missing.length > 0) {
+    console.error(`FATAL: Missing or placeholder environment variables: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+}
+
 // Prevent unhandled rejections from crashing the process in dev
 process.on("unhandledRejection", (reason) => {
   console.error("[unhandledRejection]", reason);

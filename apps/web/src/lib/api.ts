@@ -11,22 +11,60 @@ function getToken(): string | null {
   return localStorage.getItem("cliniqai_access_token");
 }
 
+let refreshPromise: Promise<void> | null = null;
+
 async function request<T>(
   method: string,
   path: string,
   body?: unknown,
   headers?: Record<string, string>
 ): Promise<T> {
-  const token = getToken();
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
+  const doRequest = async (): Promise<Response> => {
+    const token = getToken();
+    return fetch(`${BASE}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+  };
+
+  let res = await doRequest();
+
+  // On 401, attempt token refresh once
+  if (res.status === 401 && path !== "/auth/refresh" && path !== "/auth/login") {
+    if (!refreshPromise) {
+      refreshPromise = (async () => {
+        const refreshToken = typeof window !== "undefined" ? localStorage.getItem("cliniqai_refresh_token") : null;
+        if (!refreshToken) throw new Error("No refresh token");
+        try {
+          const refreshRes = await fetch(`${BASE}/auth/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refreshToken }),
+          });
+          if (!refreshRes.ok) throw new Error("Refresh failed");
+          const data = await refreshRes.json();
+          localStorage.setItem("cliniqai_access_token", data.accessToken);
+          if (data.refreshToken) localStorage.setItem("cliniqai_refresh_token", data.refreshToken);
+        } catch {
+          localStorage.removeItem("cliniqai_access_token");
+          localStorage.removeItem("cliniqai_refresh_token");
+          if (typeof window !== "undefined") window.location.href = "/login";
+          throw new Error("Session expired");
+        }
+      })().finally(() => { refreshPromise = null; });
+    }
+    try {
+      await refreshPromise;
+      res = await doRequest();
+    } catch {
+      // refresh failed, throw original 401
+    }
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
