@@ -35,7 +35,7 @@ interface ConsultationItem {
   status: string;
   chiefComplaint?: string;
   startedAt: string;
-  patient: { id: string; phone: string };
+  patient: { id: string; phone: string; name?: string | null };
 }
 
 export default function DashboardPage() {
@@ -75,7 +75,7 @@ export default function DashboardPage() {
   const completedAppts = todayAppts.filter((a) => a.status === "completed");
 
   return (
-    <div>
+    <div className="p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-heading font-bold text-foreground">
           Good {greeting()}, {user?.doctor?.name ? `Dr. ${user.doctor.name.split(" ")[0]}` : "Doctor"}
@@ -85,7 +85,7 @@ export default function DashboardPage() {
 
       {/* Active consultations alert */}
       {activeConsultations.length > 0 && (
-        <div className="mb-6 rounded-xl border border-purple-200 bg-purple-50 p-4">
+        <div className="mb-6 rounded-xl border border-purple-200 bg-purple-50 p-4 animate-slide-up">
           <p className="text-sm font-semibold text-purple-800 mb-2">
             {activeConsultations.length} active consultation{activeConsultations.length !== 1 ? "s" : ""} in progress
           </p>
@@ -94,9 +94,9 @@ export default function DashboardPage() {
               <Link
                 key={c.id}
                 href={`/dashboard/consultations/${c.id}`}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white border border-purple-200 px-3 py-1 text-xs font-medium text-purple-700 hover:bg-purple-50 cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-full bg-white border border-purple-200 px-3 py-1 text-xs font-medium text-purple-700 hover:bg-purple-50 transition-colors cursor-pointer"
               >
-                {c.patient.phone}
+                {c.patient.name || c.patient.phone}
                 {c.chiefComplaint && <span className="text-purple-400">— {c.chiefComplaint.slice(0, 25)}</span>}
                 <span className="text-purple-500">Open →</span>
               </Link>
@@ -217,7 +217,7 @@ export default function DashboardPage() {
                     {new Date(appt.scheduledAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                     <span className="ml-2 text-xs text-muted-foreground capitalize">{appt.type.replace("_", " ")}</span>
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5 font-mono">{appt.patientId.slice(0, 8)}…</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{appt.patient?.name || appt.patient?.phone || `${appt.patientId.slice(0, 8)}…`}</p>
                 </div>
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
                   appt.status === "confirmed" ? "bg-primary/10 text-primary" : "bg-yellow-100 text-yellow-700"

@@ -9,8 +9,9 @@ export default defineConfig({
     include: ["src/__tests__/**/*.test.ts"],
     coverage: {
       provider: "v8",
+      reporter: ["text", "lcov"],
       include: ["src/routes/**", "src/middleware/**", "src/lib/**"],
-      exclude: ["src/__tests__/**"],
+      exclude: ["src/__tests__/**", "src/**/*.d.ts"],
       thresholds: {
         statements: 70,
       },

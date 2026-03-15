@@ -59,7 +59,7 @@ export default function PatientsPage() {
       </form>
 
       {loading ? (
-        <TableSkeleton rows={5} cols={4} />
+        <TableSkeleton rows={5} cols={5} />
       ) : !data?.data.length ? (
         <EmptyState
           icon={<UsersIcon className="h-8 w-8 text-muted-foreground" />}
@@ -74,7 +74,7 @@ export default function PatientsPage() {
             <table className="min-w-full divide-y divide-border">
               <thead className="bg-muted/50">
                 <tr>
-                  {["Phone", "Tags", "Registered", "Actions"].map((h) => (
+                  {["Name", "Phone", "Tags", "Registered", "Actions"].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                       {h}
                     </th>
@@ -84,7 +84,8 @@ export default function PatientsPage() {
               <tbody className="divide-y divide-border/50">
                 {data.data.map((pt) => (
                   <tr key={pt.id} className="hover:bg-muted/30">
-                    <td className="px-4 py-3 text-sm font-medium text-card-foreground">{pt.phone}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-card-foreground">{pt.name || "—"}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">{pt.phone}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {pt.tags.map(({ tag }) => (

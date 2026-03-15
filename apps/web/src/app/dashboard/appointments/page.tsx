@@ -150,7 +150,7 @@ export default function AppointmentsPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    {["Time", "Patient ID", "Type", "Status", "Actions"].map((h) => (
+                    {["Time", "Patient", "Type", "Status", "Actions"].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>
                     ))}
                   </tr>
@@ -161,9 +161,9 @@ export default function AppointmentsPage() {
                       <td className="px-4 py-3 text-sm text-gray-900">
                         {new Date(appt.scheduledAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                       </td>
-                      <td className="px-4 py-3 text-sm font-mono text-gray-700">
-                        <Link href={`/dashboard/patients/${appt.patientId}`} className="hover:text-blue-600 hover:underline">
-                          {appt.patientId.slice(0, 8)}…
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        <Link href={`/dashboard/patients/${appt.patientId}`} className="hover:text-blue-600 hover:underline font-medium">
+                          {appt.patient?.name || appt.patient?.phone || `${appt.patientId.slice(0, 8)}…`}
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 capitalize">{appt.type.replace("_", " ")}</td>

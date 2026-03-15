@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { authenticate, requireScope } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
+import { asyncHandler } from "../lib/asyncHandler.js";
 
 export const pharmacyRouter = Router();
 
@@ -36,7 +37,7 @@ const DispenseSchema = z.object({
 
 // ─── GET /api/pharmacy/medicines ─────────────────────────────────────────────
 
-pharmacyRouter.get("/medicines", requireScope("pharmacy:read"), async (req, res) => {
+pharmacyRouter.get("/medicines", requireScope("pharmacy:read"), asyncHandler(async (req, res) => {
   const { search, page = "1", limit = "20" } = req.query as Record<string, string>;
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -55,11 +56,11 @@ pharmacyRouter.get("/medicines", requireScope("pharmacy:read"), async (req, res)
   ]);
 
   res.json({ data: medicines, meta: { total, page: parseInt(page), limit: parseInt(limit) } });
-});
+}));
 
 // ─── POST /api/pharmacy/medicines ────────────────────────────────────────────
 
-pharmacyRouter.post("/medicines", requireScope("pharmacy:write"), async (req, res) => {
+pharmacyRouter.post("/medicines", requireScope("pharmacy:write"), asyncHandler(async (req, res) => {
   const result = CreateMedicineSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -68,11 +69,11 @@ pharmacyRouter.post("/medicines", requireScope("pharmacy:write"), async (req, re
 
   const medicine = await prisma.medicine.create({ data: result.data });
   res.status(201).json(medicine);
-});
+}));
 
 // ─── GET /api/pharmacy/inventory/low-stock — MUST be before /:id ─────────────
 
-pharmacyRouter.get("/inventory/low-stock", requireScope("pharmacy:read"), async (req, res) => {
+pharmacyRouter.get("/inventory/low-stock", requireScope("pharmacy:read"), asyncHandler(async (req, res) => {
   const clinicId = req.query["clinicId"] as string | undefined;
 
   const items = await prisma.inventory.findMany({
@@ -85,11 +86,11 @@ pharmacyRouter.get("/inventory/low-stock", requireScope("pharmacy:read"), async 
   });
 
   res.json(items);
-});
+}));
 
 // ─── GET /api/pharmacy/inventory ─────────────────────────────────────────────
 
-pharmacyRouter.get("/inventory", requireScope("pharmacy:read"), async (req, res) => {
+pharmacyRouter.get("/inventory", requireScope("pharmacy:read"), asyncHandler(async (req, res) => {
   const clinicId = req.query["clinicId"] as string | undefined;
 
   const inventory = await prisma.inventory.findMany({
@@ -99,11 +100,11 @@ pharmacyRouter.get("/inventory", requireScope("pharmacy:read"), async (req, res)
   });
 
   res.json(inventory);
-});
+}));
 
 // ─── PATCH /api/pharmacy/inventory/:id ───────────────────────────────────────
 
-pharmacyRouter.patch("/inventory/:id", requireScope("pharmacy:write"), async (req, res) => {
+pharmacyRouter.patch("/inventory/:id", requireScope("pharmacy:write"), asyncHandler(async (req, res) => {
   const result = UpdateInventorySchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -130,11 +131,11 @@ pharmacyRouter.patch("/inventory/:id", requireScope("pharmacy:write"), async (re
   });
 
   res.json(updated);
-});
+}));
 
 // ─── GET /api/pharmacy/queue ──────────────────────────────────────────────────
 
-pharmacyRouter.get("/queue", requireScope("pharmacy:read"), async (req, res) => {
+pharmacyRouter.get("/queue", requireScope("pharmacy:read"), asyncHandler(async (req, res) => {
   const rxList = await prisma.prescription.findMany({
     where: {
       doctorId: req.user!.doctor_id!,
@@ -149,11 +150,11 @@ pharmacyRouter.get("/queue", requireScope("pharmacy:read"), async (req, res) => 
     },
   });
   res.json({ data: rxList });
-});
+}));
 
 // ─── POST /api/pharmacy/dispense ─────────────────────────────────────────────
 
-pharmacyRouter.post("/dispense", requireScope("pharmacy:write"), async (req, res) => {
+pharmacyRouter.post("/dispense", requireScope("pharmacy:write"), asyncHandler(async (req, res) => {
   const result = DispenseSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -192,4 +193,4 @@ pharmacyRouter.post("/dispense", requireScope("pharmacy:write"), async (req, res
   ]);
 
   res.status(201).json(dispensing);
-});
+}));

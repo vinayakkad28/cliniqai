@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { fhirClient } from "../lib/fhirClient.js";
 import { emitToDoctor } from "../lib/socketServer.js";
 import { SOCKET_EVENTS } from "../lib/socketEvents.js";
+import { asyncHandler } from "../lib/asyncHandler.js";
 
 export const consultationsRouter = Router();
 
@@ -17,14 +18,36 @@ const StartConsultationSchema = z.object({
   chiefComplaint: z.string().max(500).optional(),
 });
 
+const SoapNotesSchema = z.object({
+  subjective: z.string().max(5000).optional(),
+  objective: z.string().max(5000).optional(),
+  assessment: z.string().max(5000).optional(),
+  plan: z.string().max(5000).optional(),
+});
+
+const VitalsSchema = z.object({
+  bloodPressureSystolic: z.number().optional(),
+  bloodPressureDiastolic: z.number().optional(),
+  pulse: z.number().optional(),
+  temperature: z.number().optional(),
+  spo2: z.number().optional(),
+  weight: z.number().optional(),
+  height: z.number().optional(),
+  respiratoryRate: z.number().optional(),
+});
+
 const UpdateConsultationSchema = z.object({
   chiefComplaint: z.string().max(500).optional(),
   notes: z.string().max(10_000).optional(),
+  diagnosis: z.string().max(500).optional(),
+  icdCodes: z.array(z.string().max(20)).optional(),
+  soapNotes: SoapNotesSchema.optional(),
+  vitals: VitalsSchema.optional(),
 });
 
 // ─── POST /api/consultations — Start ─────────────────────────────────────────
 
-consultationsRouter.post("/", requireScope("consultations:write"), async (req, res) => {
+consultationsRouter.post("/", requireScope("consultations:write"), asyncHandler(async (req, res) => {
   const result = StartConsultationSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -86,11 +109,11 @@ consultationsRouter.post("/", requireScope("consultations:write"), async (req, r
   });
 
   res.status(201).json(consultation);
-});
+}));
 
 // ─── GET /api/consultations — List ───────────────────────────────────────────
 
-consultationsRouter.get("/", requireScope("consultations:read"), async (req, res) => {
+consultationsRouter.get("/", requireScope("consultations:read"), asyncHandler(async (req, res) => {
   const { patientId, status, page = "1", limit = "20" } = req.query as Record<string, string>;
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -108,7 +131,7 @@ consultationsRouter.get("/", requireScope("consultations:read"), async (req, res
       take: parseInt(limit),
       orderBy: { startedAt: "desc" },
       include: {
-        patient: { select: { id: true, phone: true } },
+        patient: { select: { id: true, name: true, phone: true } },
         prescriptions: { select: { id: true } },
         labOrders: { select: { id: true } },
         invoices: { select: { id: true, status: true, total: true } },
@@ -117,11 +140,11 @@ consultationsRouter.get("/", requireScope("consultations:read"), async (req, res
   ]);
 
   res.json({ data, meta: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) } });
-});
+}));
 
 // ─── GET /api/consultations/:id ───────────────────────────────────────────────
 
-consultationsRouter.get("/:id", requireScope("consultations:read"), async (req, res) => {
+consultationsRouter.get("/:id", requireScope("consultations:read"), asyncHandler(async (req, res) => {
   const consultation = await prisma.consultation.findUnique({
     where: { id: req.params["id"] },
     include: {
@@ -132,17 +155,17 @@ consultationsRouter.get("/:id", requireScope("consultations:read"), async (req, 
     },
   });
 
-  if (!consultation) {
+  if (!consultation || consultation.doctorId !== req.user!.doctor_id) {
     res.status(404).json({ error: "Consultation not found" });
     return;
   }
 
   res.json(consultation);
-});
+}));
 
 // ─── PATCH /api/consultations/:id ─────────────────────────────────────────────
 
-consultationsRouter.patch("/:id", requireScope("consultations:write"), async (req, res) => {
+consultationsRouter.patch("/:id", requireScope("consultations:write"), asyncHandler(async (req, res) => {
   const result = UpdateConsultationSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -171,11 +194,11 @@ consultationsRouter.patch("/:id", requireScope("consultations:write"), async (re
   });
 
   res.json(updated);
-});
+}));
 
 // ─── POST /api/consultations/:id/end ─────────────────────────────────────────
 
-consultationsRouter.post("/:id/end", requireScope("consultations:write"), async (req, res) => {
+consultationsRouter.post("/:id/end", requireScope("consultations:write"), asyncHandler(async (req, res) => {
   const consultation = await prisma.consultation.findUnique({
     where: { id: req.params["id"] },
     include: { appointment: true },
@@ -226,11 +249,11 @@ consultationsRouter.post("/:id/end", requireScope("consultations:write"), async 
   });
 
   res.json(updated);
-});
+}));
 
 // ─── POST /api/consultations/:id/telemedicine/room ───────────────────────────
 
-consultationsRouter.post("/:id/telemedicine/room", requireScope("consultations:write"), async (req, res) => {
+consultationsRouter.post("/:id/telemedicine/room", requireScope("consultations:write"), asyncHandler(async (req, res) => {
   const consultation = await prisma.consultation.findUnique({ where: { id: req.params["id"] } });
   if (!consultation || consultation.doctorId !== req.user!.doctor_id!) {
     res.status(404).json({ error: "Not found" });
@@ -264,4 +287,4 @@ consultationsRouter.post("/:id/telemedicine/room", requireScope("consultations:w
 
   const room = await r.json() as { url: string; name: string };
   res.json({ roomUrl: room.url, roomName: room.name });
-});
+}));

@@ -6,8 +6,8 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  schemas    = ["auth", "clinic", "patients", "appointments", "consultations", "prescriptions", "billing", "pharmacy", "labs", "documents", "ai", "org"]
-  extensions = [pgvector(map: "vector", schema: "public")]
+  schemas    = ["auth", "clinic", "patients", "appointments", "consultations", "prescriptions", "billing", "pharmacy", "labs", "documents", "ai", "org", "abdm"]
+  // extensions = [pgvector(map: "vector", schema: "public")]
 }
 
 // ─────────────────────────────────────────
@@ -102,19 +102,24 @@ model Doctor {
   consultations Consultation[]
   prescriptions Prescription[]
   invoices      Invoice[]
+  followups     Followup[]
 
   @@map("doctors")
   @@schema("clinic")
 }
 
 model Clinic {
-  id         String   @id @default(uuid())
-  name       String
-  address    String
-  gstNumber  String?  @map("gst_number")
-  logoUrl    String?  @map("logo_url")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id              String    @id @default(uuid())
+  name            String
+  address         String
+  gstNumber       String?   @map("gst_number")
+  logoUrl         String?   @map("logo_url")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  // ABDM HIP fields
+  abdmHipId       String?   @unique @map("abdm_hip_id")
+  abdmRegistered  Boolean   @default(false) @map("abdm_registered")
+  abdmRegisteredAt DateTime? @map("abdm_registered_at")
 
   clinicDoctors    ClinicDoctor[]
   appointmentQueue AppointmentQueue[]
@@ -156,14 +161,23 @@ model WorkingHours {
 // ─────────────────────────────────────────
 
 model Patient {
-  id                String   @id @default(uuid())
-  userId            String?  @unique @map("user_id")
-  fhirPatientId     String   @unique @map("fhir_patient_id")
-  phone             String   @unique
-  abhaNumber        String?  @unique @map("abha_number")
-  createdByDoctorId String?  @map("created_by_doctor_id")
-  createdAt         DateTime @default(now()) @map("created_at")
-  medicalHistory    Json?    @map("medical_history") @db.JsonB
+  id                String    @id @default(uuid())
+  userId            String?   @unique @map("user_id")
+  fhirPatientId     String    @unique @map("fhir_patient_id")
+  phone             String    @unique
+  name              String?
+  dateOfBirth       DateTime? @map("date_of_birth")
+  gender            String?
+  address           String?
+  bloodGroup        String?   @map("blood_group")
+  createdByDoctorId String?   @map("created_by_doctor_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  medicalHistory    Json?     @map("medical_history") @db.JsonB
+  // ABDM fields
+  abhaNumber        String?   @unique @map("abha_number")
+  abhaAddress       String?   @unique @map("abha_address")
+  abdmLinked        Boolean   @default(false) @map("abdm_linked")
+  abdmLinkedAt      DateTime? @map("abdm_linked_at")
 
   user          User?              @relation(fields: [userId], references: [id])
   tags          PatientTag[]
@@ -174,6 +188,8 @@ model Patient {
   labOrders     LabOrder[]
   queueEntries  AppointmentQueue[]
   abdmConsents  AbdmConsent[]
+  abdmRecords   AbdmHealthRecord[]
+  followups     Followup[]
 
   @@map("patients")
   @@schema("patients")
@@ -270,6 +286,10 @@ model Consultation {
   endedAt         DateTime?          @map("ended_at")
   chiefComplaint  String?            @map("chief_complaint")
   notes           String?
+  diagnosis       String?
+  icdCodes        String[]           @map("icd_codes")
+  vitals          Json?              @db.JsonB
+  soapNotes       Json?              @map("soap_notes") @db.JsonB
   status          ConsultationStatus @default(in_progress)
 
   appointment   Appointment    @relation(fields: [appointmentId], references: [id])
@@ -278,6 +298,7 @@ model Consultation {
   prescriptions Prescription[]
   invoices      Invoice[]
   labOrders     LabOrder[]
+  followups     Followup[]
 
   @@map("consultations")
   @@schema("consultations")
@@ -297,18 +318,24 @@ enum PrescriptionStatus {
 }
 
 model Prescription {
-  id                      String             @id @default(uuid())
-  consultationId          String             @map("consultation_id")
-  patientId               String             @map("patient_id")
-  doctorId                String             @map("doctor_id")
-  fhirMedicationRequestId String?            @unique @map("fhir_medication_request_id")
-  sentVia                 String?            @map("sent_via")
-  sentAt                  DateTime?          @map("sent_at")
-  pdfUrl                  String?            @map("pdf_url")
-  medications             Json?              @map("medications")
-  digitalSignature        String?            @map("digital_signature")
-  status                  PrescriptionStatus @default(draft)
-  createdAt               DateTime           @default(now()) @map("created_at")
+  id                        String             @id @default(uuid())
+  consultationId            String             @map("consultation_id")
+  patientId                 String             @map("patient_id")
+  doctorId                  String             @map("doctor_id")
+  medications               Json?              @db.JsonB
+  notes                     String?
+  fhirMedicationRequestId   String?            @unique @map("fhir_medication_request_id")
+  sentVia                   String?            @map("sent_via")
+  sentAt                    DateTime?          @map("sent_at")
+  pdfUrl                    String?            @map("pdf_url")
+  status                    PrescriptionStatus @default(draft)
+  createdAt                 DateTime           @default(now()) @map("created_at")
+  // E-prescription fields
+  digitalSignature          String?            @map("digital_signature")
+  qrData                    String?            @map("qr_data")
+  verificationCode          String?            @unique @map("verification_code")
+  ePrescriptionGenerated    Boolean            @default(false) @map("e_prescription_generated")
+  ePrescriptionGeneratedAt  DateTime?          @map("e_prescription_generated_at")
 
   consultation Consultation @relation(fields: [consultationId], references: [id])
   patient      Patient      @relation(fields: [patientId], references: [id])
@@ -564,7 +591,7 @@ model DocumentEmbedding {
   documentId  String                      @map("document_id")
   chunkIndex  Int                         @map("chunk_index")
   chunkText   String                      @map("chunk_text")
-  embedding   Unsupported("vector(768)")?
+  embedding   Json?
   createdAt   DateTime                    @default(now()) @map("created_at")
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
@@ -604,4 +631,98 @@ model AiInsight {
 
   @@map("ai_insights")
   @@schema("ai")
+}
+
+// ─────────────────────────────────────────
+// ABDM (Ayushman Bharat Digital Mission)
+// ─────────────────────────────────────────
+
+enum AbdmConsentStatus {
+  REQUESTED
+  GRANTED
+  DENIED
+  EXPIRED
+  REVOKED
+
+  @@schema("abdm")
+}
+
+model AbdmConsent {
+  id                String            @id @default(uuid())
+  patientId         String            @map("patient_id")
+  consentRequestId  String            @unique @map("consent_request_id")
+  consentArtefactId String?           @map("consent_artefact_id")
+  status            AbdmConsentStatus @default(REQUESTED)
+  purpose           String
+  requestedBy       String            @map("requested_by")
+  healthInfoTypes   String[]          @map("health_info_types")
+  dateRangeFrom     DateTime          @map("date_range_from")
+  dateRangeTo       DateTime          @map("date_range_to")
+  respondedAt       DateTime?         @map("responded_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("abdm_consents")
+  @@schema("abdm")
+}
+
+enum AbdmRecordStatus {
+  PUSHED
+  RECEIVED
+  FAILED
+
+  @@schema("abdm")
+}
+
+model AbdmHealthRecord {
+  id              String           @id @default(uuid())
+  patientId       String           @map("patient_id")
+  consultationId  String?          @map("consultation_id")
+  recordType      String           @map("record_type")
+  sourceHip       String?          @map("source_hip")
+  transactionId   String?          @map("transaction_id")
+  fhirResource    Json?            @map("fhir_resource") @db.JsonB
+  status          AbdmRecordStatus @default(RECEIVED)
+  pushedAt        DateTime?        @map("pushed_at")
+  fetchedAt       DateTime?        @map("fetched_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("abdm_health_records")
+  @@schema("abdm")
+}
+
+// ─────────────────────────────────────────
+// FOLLOW-UPS
+// ─────────────────────────────────────────
+
+enum FollowupStatus {
+  pending
+  sent
+  acknowledged
+  cancelled
+
+  @@schema("consultations")
+}
+
+model Followup {
+  id              String         @id @default(uuid())
+  patientId       String         @map("patient_id")
+  consultationId  String?        @map("consultation_id")
+  doctorId        String         @map("doctor_id")
+  scheduledDate   DateTime       @map("scheduled_date")
+  reason          String
+  channel         String         @default("whatsapp")
+  status          FollowupStatus @default(pending)
+  sentAt          DateTime?      @map("sent_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  patient      Patient       @relation(fields: [patientId], references: [id])
+  consultation Consultation? @relation(fields: [consultationId], references: [id])
+  doctor       Doctor        @relation(fields: [doctorId], references: [id])
+
+  @@map("followups")
+  @@schema("consultations")
 }

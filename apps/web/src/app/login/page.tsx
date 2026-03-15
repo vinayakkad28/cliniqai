@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { auth } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
@@ -63,10 +64,22 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md rounded-2xl bg-card shadow-md p-8">
+      {/* Decorative background elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-20 -right-20 w-96 h-96 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -bottom-20 -left-20 w-80 h-80 rounded-full bg-secondary/10 blur-3xl" />
+      </div>
+
+      <div className="relative w-full max-w-md rounded-2xl bg-card/90 backdrop-blur-sm shadow-lg border border-border/50 p-8">
+        {/* Brand */}
         <div className="mb-8 text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary mb-4">
+            <svg className="w-7 h-7 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </div>
           <h1 className="text-3xl font-heading font-bold text-primary">CliniqAI</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Doctor Login</p>
+          <p className="mt-1 text-sm text-muted-foreground">AI-powered clinical platform for doctors</p>
         </div>
 
         {step === "phone" ? (
@@ -82,7 +95,7 @@ export default function LoginPage() {
                 placeholder="+91 98765 43210"
                 value={phone}
                 onChange={(e) => { setPhone(e.target.value); setError(""); }}
-                className={`w-full rounded-lg border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
+                className={`w-full rounded-lg border px-4 py-2.5 text-sm text-center text-lg tracking-wide focus:outline-none focus:ring-2 focus:ring-ring ${
                   error ? "border-destructive" : "border-border focus:border-primary"
                 }`}
               />
@@ -139,12 +152,23 @@ export default function LoginPage() {
               type="button"
               disabled={loading}
               onClick={handleSendOtp}
-              className="w-full cursor-pointer text-sm text-muted-foreground underline disabled:opacity-60"
+              className="w-full cursor-pointer text-sm text-muted-foreground hover:text-primary transition-colors disabled:opacity-60"
             >
               Resend OTP
             </button>
           </form>
         )}
+
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          New doctor?{" "}
+          <Link href="/register" className="text-primary font-medium hover:underline">
+            Register here
+          </Link>
+        </p>
+
+        <p className="mt-6 text-center text-2xs text-muted-foreground">
+          Secured with end-to-end encryption. HIPAA & DPDP compliant.
+        </p>
       </div>
     </main>
   );

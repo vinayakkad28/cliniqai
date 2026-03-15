@@ -9,7 +9,7 @@ function getSecret(key: string): string {
 
 export function signAccessToken(payload: Omit<AuthPayload, "iat" | "exp">): string {
   return jwt.sign(payload, getSecret("JWT_SECRET"), {
-    expiresIn: (process.env["JWT_EXPIRES_IN"] ?? "7d") as jwt.SignOptions["expiresIn"],
+    expiresIn: (process.env["JWT_EXPIRES_IN"] ?? "30m") as jwt.SignOptions["expiresIn"],
   });
 }
 

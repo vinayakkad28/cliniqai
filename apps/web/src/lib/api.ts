@@ -11,22 +11,60 @@ function getToken(): string | null {
   return localStorage.getItem("cliniqai_access_token");
 }
 
+let refreshPromise: Promise<void> | null = null;
+
 async function request<T>(
   method: string,
   path: string,
   body?: unknown,
   headers?: Record<string, string>
 ): Promise<T> {
-  const token = getToken();
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
+  const doRequest = async (): Promise<Response> => {
+    const token = getToken();
+    return fetch(`${BASE}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+  };
+
+  let res = await doRequest();
+
+  // On 401, attempt token refresh once
+  if (res.status === 401 && path !== "/auth/refresh" && path !== "/auth/login") {
+    if (!refreshPromise) {
+      refreshPromise = (async () => {
+        const refreshToken = typeof window !== "undefined" ? localStorage.getItem("cliniqai_refresh_token") : null;
+        if (!refreshToken) throw new Error("No refresh token");
+        try {
+          const refreshRes = await fetch(`${BASE}/auth/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refreshToken }),
+          });
+          if (!refreshRes.ok) throw new Error("Refresh failed");
+          const data = await refreshRes.json();
+          localStorage.setItem("cliniqai_access_token", data.accessToken);
+          if (data.refreshToken) localStorage.setItem("cliniqai_refresh_token", data.refreshToken);
+        } catch {
+          localStorage.removeItem("cliniqai_access_token");
+          localStorage.removeItem("cliniqai_refresh_token");
+          if (typeof window !== "undefined") window.location.href = "/login";
+          throw new Error("Session expired");
+        }
+      })().finally(() => { refreshPromise = null; });
+    }
+    try {
+      await refreshPromise;
+      res = await doRequest();
+    } catch {
+      // refresh failed, throw original 401
+    }
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -57,6 +95,9 @@ export const auth = {
 
   refresh: (refreshToken: string) =>
     request<Pick<AuthTokens, "accessToken" | "refreshToken">>("POST", "/auth/refresh", { refreshToken }),
+
+  register: (data: { phone: string; name: string; licenseNumber: string; email?: string }) =>
+    request<{ message: string; userId: string; dev_otp?: string }>("POST", "/auth/register", data),
 
   logout: (refreshToken?: string) =>
     request<{ message: string }>("POST", "/auth/logout", refreshToken ? { refreshToken } : {}),
@@ -120,6 +161,7 @@ export interface MedicalHistory {
 export interface Patient {
   id: string;
   phone: string;
+  name?: string | null;
   fhirPatientId: string;
   tags: { tag: string }[];
   createdAt: string;
@@ -160,6 +202,7 @@ export interface Appointment {
   status: string;
   type: string;
   notes: string | null;
+  patient?: { id: string; phone: string; name?: string | null };
 }
 
 export interface AppointmentListResponse {
@@ -389,3 +432,114 @@ export const insights = {
   longitudinal: (patientId: string) =>
     request<{ insight: AiInsight; cached: boolean }>("GET", `/insights/longitudinal/${patientId}`),
 };
+
+// ─── Follow-ups ──────────────────────────────────────────────────────────────
+
+export interface FollowUp {
+  id: string;
+  patientId: string;
+  consultationId: string | null;
+  scheduledDate: string;
+  reason: string;
+  channel: 'sms' | 'whatsapp' | 'email';
+  status: 'pending' | 'sent' | 'acknowledged' | 'cancelled';
+  patientPhone?: string;
+  patientName?: string;
+  createdAt: string;
+}
+
+export const followups = {
+  list: (params?: { status?: string; patientId?: string; from?: string; to?: string; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString();
+    return request<{ data: FollowUp[]; meta: { total: number; page: number; limit: number; pages: number } }>(
+      "GET", `/followups${qs ? `?${qs}` : ""}`
+    );
+  },
+  create: (data: { patientId: string; consultationId?: string; scheduledDate: string; reason: string; channel: string }) =>
+    request<FollowUp>("POST", "/followups", data),
+  update: (id: string, data: { status?: string }) =>
+    request<FollowUp>("PATCH", `/followups/${id}`, data),
+  delete: (id: string) =>
+    request<{ message: string }>("DELETE", `/followups/${id}`),
+  due: (params?: { range?: string }) => {
+    const qs = params?.range ? `?range=${params.range}` : '';
+    return request<{ data: FollowUp[] }>("GET", `/followups/due${qs}`);
+  },
+  autoGenerate: (data: { consultationId: string }) =>
+    request<{ generated: FollowUp[] }>("POST", "/followups/auto-generate", data),
+};
+
+// ─── Audit Log ───────────────────────────────────────────────────────────────
+
+export interface AuditEntry {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  action: string;
+  resource: string;
+  resourceId: string;
+  details: string;
+  ip: string;
+}
+
+export const auditLog = {
+  list: (params?: { action?: string; resource?: string; search?: string; from?: string; to?: string; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString();
+    return request<{ data: AuditEntry[]; meta: { total: number; page: number; limit: number; pages: number } }>(
+      "GET", `/audit-log${qs ? `?${qs}` : ""}`
+    );
+  },
+  stats: () => request<{ today: number; total: number; byAction: Record<string, number>; byResource: Record<string, number> }>(
+    "GET", "/audit-log/stats"
+  ),
+  exportUrl: (params?: { from?: string; to?: string; action?: string }) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString();
+    return `/audit-log/export${qs ? `?${qs}` : ""}`;
+  },
+};
+
+// ─── ABDM v2 ─────────────────────────────────────────────────────────────────
+
+export const abdm = {
+  createAbha: (data: { patientId: string; aadhaarNumber: string }) =>
+    request<{ txnId: string; message: string }>("POST", "/abdm-v2/abha/create", data),
+  verifyAbhaOtp: (data: { patientId: string; txnId: string; otp: string }) =>
+    request<{ success: boolean; abhaNumber: string; abhaAddress: string }>("POST", "/abdm-v2/abha/verify-otp", data),
+  linkAbha: (data: { patientId: string; abhaNumber: string }) =>
+    request<{ success: boolean; abhaNumber: string }>("POST", "/abdm-v2/abha/link", data),
+  registerHip: () =>
+    request<{ success: boolean; hipId: string }>("POST", "/abdm-v2/hip/register"),
+  requestConsent: (data: { patientId: string; purpose?: string; healthInfoTypes?: string[] }) =>
+    request<{ requestId: string; status: string }>("POST", "/abdm-v2/consent/request", data),
+  getConsents: (patientId: string) =>
+    request<Array<{ id: string; status: string; purpose: string; createdAt: string }>>("GET", `/abdm-v2/consent/${patientId}`),
+  pushRecords: (data: { patientId: string; consultationId: string }) =>
+    request<{ success: boolean; transactionId: string }>("POST", "/abdm-v2/records/push", data),
+};
+
+// ─── Analytics ──────────────────────────────────────────────────────────────
+
+export interface AnalyticsSummary {
+  totalPatients: number;
+  totalConsultations: number;
+  totalRevenue: number;
+  avgConsultationDuration: number;
+  topDiagnoses: { diagnosis: string; count: number }[];
+  appointmentsByType: { type: string; count: number }[];
+  consultationsByHour: { hour: number; count: number }[];
+}
+
+export const analytics = {
+  summary: (days = 30) =>
+    request<AnalyticsSummary>("GET", `/analytics/summary?days=${days}`),
+};
+
+// Unified API namespace for pages that import { api }
+export const api = { auth, doctors, staff, patients, appointments, consultations, billing, clinic, documents, labs, pharmacy, prescriptions, pharmacyQueue, telemedicine, insights, followups, auditLog, abdm, analytics };

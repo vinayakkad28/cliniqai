@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { smsReminderQueue } from "../lib/queues.js";
 import { emitToDoctor } from "../lib/socketServer.js";
 import { SOCKET_EVENTS } from "../lib/socketEvents.js";
+import { asyncHandler } from "../lib/asyncHandler.js";
 
 export const appointmentsRouter = Router();
 
@@ -36,7 +37,7 @@ const ListQuerySchema = z.object({
 
 // ─── GET /api/appointments ────────────────────────────────────────────────────
 
-appointmentsRouter.get("/", requireScope("appointments:read"), async (req, res) => {
+appointmentsRouter.get("/", requireScope("appointments:read"), asyncHandler(async (req, res) => {
   const query = ListQuerySchema.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: query.error.flatten() });
@@ -46,10 +47,13 @@ appointmentsRouter.get("/", requireScope("appointments:read"), async (req, res) 
   const { date, from, to, status, page, limit } = query.data;
   const skip = (page - 1) * limit;
 
+  // Use IST (UTC+5:30) for Indian clinics — dates in YYYY-MM-DD are IST
+  const istOffset = "T00:00:00.000+05:30";
+  const istEndOffset = "T23:59:59.999+05:30";
   const dateFilter = date
-    ? { scheduledAt: { gte: new Date(`${date}T00:00:00.000Z`), lte: new Date(`${date}T23:59:59.999Z`) } }
+    ? { scheduledAt: { gte: new Date(`${date}${istOffset}`), lte: new Date(`${date}${istEndOffset}`) } }
     : (from || to)
-    ? { scheduledAt: { ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}), ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}) } }
+    ? { scheduledAt: { ...(from ? { gte: new Date(`${from}${istOffset}`) } : {}), ...(to ? { lte: new Date(`${to}${istEndOffset}`) } : {}) } }
     : {};
 
   const where = {
@@ -74,11 +78,11 @@ appointmentsRouter.get("/", requireScope("appointments:read"), async (req, res) 
   ]);
 
   res.json({ data: appointments, meta: { total, page, limit, pages: Math.ceil(total / limit) } });
-});
+}));
 
 // ─── POST /api/appointments ───────────────────────────────────────────────────
 
-appointmentsRouter.post("/", requireScope("appointments:write"), async (req, res) => {
+appointmentsRouter.post("/", requireScope("appointments:write"), asyncHandler(async (req, res) => {
   const result = CreateAppointmentSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -119,7 +123,7 @@ appointmentsRouter.post("/", requireScope("appointments:write"), async (req, res
       notes,
       status: "scheduled",
     },
-    include: { patient: { select: { id: true, phone: true } } },
+    include: { patient: { select: { id: true, name: true, phone: true } } },
   });
 
   // Queue SMS reminder 24h before appointment (fire-and-forget)
@@ -134,11 +138,11 @@ appointmentsRouter.post("/", requireScope("appointments:write"), async (req, res
   ).catch(() => {}); // Upstash Redis may not support delayed jobs — silent fail
 
   res.status(201).json(appointment);
-});
+}));
 
 // ─── GET /api/appointments/queue ─────────────────────────────────────────────
 
-appointmentsRouter.get("/queue", requireScope("appointments:read"), async (req, res) => {
+appointmentsRouter.get("/queue", requireScope("appointments:read"), asyncHandler(async (req, res) => {
   const clinicId = req.query["clinicId"] as string | undefined;
 
   const where = {
@@ -149,15 +153,15 @@ appointmentsRouter.get("/queue", requireScope("appointments:read"), async (req, 
   const queue = await prisma.appointmentQueue.findMany({
     where,
     orderBy: { tokenNumber: "asc" },
-    include: { patient: { select: { id: true, phone: true } } },
+    include: { patient: { select: { id: true, name: true, phone: true } } },
   });
 
   res.json(queue);
-});
+}));
 
 // ─── POST /api/appointments/queue ────────────────────────────────────────────
 
-appointmentsRouter.post("/queue", requireScope("appointments:write"), async (req, res) => {
+appointmentsRouter.post("/queue", requireScope("appointments:write"), asyncHandler(async (req, res) => {
   const result = z.object({
     clinicId: z.string().uuid(),
     patientId: z.string().uuid(),
@@ -184,15 +188,15 @@ appointmentsRouter.post("/queue", requireScope("appointments:write"), async (req
 
   const entry = await prisma.appointmentQueue.create({
     data: { clinicId, patientId, tokenNumber, status: "waiting" },
-    include: { patient: { select: { id: true, phone: true } } },
+    include: { patient: { select: { id: true, name: true, phone: true } } },
   });
 
   res.status(201).json({ ...entry, tokenNumber });
-});
+}));
 
 // ─── GET /api/appointments/:id ────────────────────────────────────────────────
 
-appointmentsRouter.get("/:id", requireScope("appointments:read"), async (req, res) => {
+appointmentsRouter.get("/:id", requireScope("appointments:read"), asyncHandler(async (req, res) => {
   const appointment = await prisma.appointment.findUnique({
     where: { id: req.params["id"] },
     include: {
@@ -207,11 +211,11 @@ appointmentsRouter.get("/:id", requireScope("appointments:read"), async (req, re
   }
 
   res.json(appointment);
-});
+}));
 
 // ─── PATCH /api/appointments/:id ─────────────────────────────────────────────
 
-appointmentsRouter.patch("/:id", requireScope("appointments:write"), async (req, res) => {
+appointmentsRouter.patch("/:id", requireScope("appointments:write"), asyncHandler(async (req, res) => {
   const result = UpdateAppointmentSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -249,11 +253,11 @@ appointmentsRouter.patch("/:id", requireScope("appointments:write"), async (req,
   }
 
   res.json(updated);
-});
+}));
 
 // ─── DELETE /api/appointments/:id ─────────────────────────────────────────────
 
-appointmentsRouter.delete("/:id", requireScope("appointments:write"), async (req, res) => {
+appointmentsRouter.delete("/:id", requireScope("appointments:write"), asyncHandler(async (req, res) => {
   const appointment = await prisma.appointment.findUnique({ where: { id: req.params["id"] } });
   if (!appointment) {
     res.status(404).json({ error: "Appointment not found" });
@@ -271,4 +275,4 @@ appointmentsRouter.delete("/:id", requireScope("appointments:write"), async (req
   });
 
   res.json({ message: "Appointment cancelled" });
-});
+}));

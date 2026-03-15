@@ -7,6 +7,7 @@ import { aiClient } from "../lib/aiClient.js";
 import { whatsappPrescriptionQueue, smsReminderQueue } from "../lib/queues.js";
 import { generatePrescriptionPdf } from "../lib/pdfGenerator.js";
 import { computeDigitalSignature, generatePrescriptionQR, verifyDigitalSignature } from "../lib/qrGenerator.js";
+import { asyncHandler } from "../lib/asyncHandler.js";
 
 export const prescriptionsRouter = Router();
 
@@ -63,7 +64,7 @@ const CreatePrescriptionSchema = z.object({
 
 // ─── POST /api/prescriptions ─────────────────────────────────────────────────
 
-prescriptionsRouter.post("/", requireScope("prescriptions:write"), async (req, res) => {
+prescriptionsRouter.post("/", requireScope("prescriptions:write"), asyncHandler(async (req, res) => {
   const result = CreatePrescriptionSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() });
@@ -163,11 +164,11 @@ prescriptionsRouter.post("/", requireScope("prescriptions:write"), async (req, r
     ddiAlerts: ddiAlerts.filter((a) => a.severity !== "major"),
     majorAlertsAcknowledged: acknowledgeDdi && majorAlerts.length > 0,
   });
-});
+}));
 
 // ─── GET /api/prescriptions/:id ──────────────────────────────────────────────
 
-prescriptionsRouter.get("/:id", requireScope("prescriptions:read"), async (req, res) => {
+prescriptionsRouter.get("/:id", requireScope("prescriptions:read"), asyncHandler(async (req, res) => {
   const prescription = await prisma.prescription.findUnique({
     where: { id: req.params["id"] },
     include: {
@@ -176,17 +177,17 @@ prescriptionsRouter.get("/:id", requireScope("prescriptions:read"), async (req, 
     },
   });
 
-  if (!prescription) {
+  if (!prescription || prescription.doctorId !== req.user!.doctor_id) {
     res.status(404).json({ error: "Prescription not found" });
     return;
   }
 
   res.json(prescription);
-});
+}));
 
 // ─── POST /api/prescriptions/:id/send ────────────────────────────────────────
 
-prescriptionsRouter.post("/:id/send", requireScope("prescriptions:write"), async (req, res) => {
+prescriptionsRouter.post("/:id/send", requireScope("prescriptions:write"), asyncHandler(async (req, res) => {
   const bodyResult = z.object({ via: z.enum(["whatsapp", "sms"]) }).safeParse(req.body);
   if (!bodyResult.success) {
     res.status(400).json({ error: bodyResult.error.flatten() });
@@ -200,7 +201,7 @@ prescriptionsRouter.post("/:id/send", requireScope("prescriptions:write"), async
       doctor: { select: { name: true } },
     },
   });
-  if (!prescription) {
+  if (!prescription || prescription.doctorId !== req.user!.doctor_id) {
     res.status(404).json({ error: "Prescription not found" });
     return;
   }
@@ -215,7 +216,7 @@ prescriptionsRouter.post("/:id/send", requireScope("prescriptions:write"), async
       prescriptionId: prescription.id,
       patientPhone: prescription.patient.phone,
       doctorName: prescription.doctor.name,
-      medications: [],
+      medications: (prescription.medications as any[]) ?? [],
     }).catch(() => {}); // fire-and-forget
   } else {
     smsReminderQueue.add({
@@ -227,11 +228,11 @@ prescriptionsRouter.post("/:id/send", requireScope("prescriptions:write"), async
   }
 
   res.json({ message: `Prescription queued for delivery via ${bodyResult.data.via}` });
-});
+}));
 
 // ─── GET /api/prescriptions/:id/pdf ─────────────────────────────────────────
 
-prescriptionsRouter.get("/:id/pdf", requireScope("prescriptions:read"), async (req, res) => {
+prescriptionsRouter.get("/:id/pdf", requireScope("prescriptions:read"), asyncHandler(async (req, res) => {
   const prescription = await prisma.prescription.findUnique({
     where: { id: req.params["id"] },
     include: {
@@ -282,11 +283,11 @@ prescriptionsRouter.get("/:id/pdf", requireScope("prescriptions:read"), async (r
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="prescription-${prescription.id.slice(0, 8)}.pdf"`);
   res.send(pdfBufferWithQR);
-});
+}));
 
 // ─── GET /api/prescriptions/:id/qr ─────────────────────────────────────────
 
-prescriptionsRouter.get("/:id/qr", requireScope("prescriptions:read"), async (req, res) => {
+prescriptionsRouter.get("/:id/qr", requireScope("prescriptions:read"), asyncHandler(async (req, res) => {
   const prescription = await prisma.prescription.findUnique({
     where: { id: req.params["id"] },
     include: {
@@ -309,4 +310,4 @@ prescriptionsRouter.get("/:id/qr", requireScope("prescriptions:read"), async (re
 
   res.setHeader("Content-Type", "image/png");
   res.send(qrPng);
-});
+}));

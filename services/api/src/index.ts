@@ -27,6 +27,25 @@ import { apiRateLimiter } from "./middleware/rateLimiter.js";
 import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
 import { initSocketServer } from "./lib/socketServer.js";
+import whatsappBotRouter from "./routes/whatsappBot.js";
+import ePrescriptionRouter from "./routes/ePrescription.js";
+import eventsRouter from "./routes/events.js";
+import abdmFullRouter from "./routes/abdmFull.js";
+import { followupsRouter } from "./routes/followups.js";
+import { analyticsRouter } from "./routes/analytics.js";
+import auditLogRouter from "./routes/auditLog.js";
+import { tracingMiddleware } from "./lib/monitoring.js";
+import { healthCheck } from "./lib/monitoring.js";
+
+// Production environment validation
+if (process.env.NODE_ENV !== 'development') {
+  const required = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'DATABASE_URL'];
+  const missing = required.filter(k => !process.env[k] || process.env[k]!.includes('your-') || process.env[k]!.includes('change-me'));
+  if (missing.length > 0) {
+    console.error(`FATAL: Missing or placeholder environment variables: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+}
 
 // Prevent unhandled rejections from crashing the process in dev
 process.on("unhandledRejection", (reason) => {
@@ -65,29 +84,38 @@ app.use(
   }),
 );
 
+// Distributed tracing
+app.use(tracingMiddleware);
+
 // Rate limiting
 app.use("/api", apiRateLimiter);
 
 // Audit logging (every authenticated request)
 app.use("/api", auditLogger);
 
-// Health check (unauthenticated) — pings DB and Redis
+// Health check (unauthenticated) — enhanced with dependency checks + DB fallback
 app.get("/health", async (_req, res) => {
-  let dbOk = true;
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    const health = await healthCheck();
+    res.status(health.status === "healthy" ? 200 : 503).json(health);
   } catch {
-    dbOk = false;
-  }
+    // Fallback: basic DB ping
+    let dbOk = true;
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      dbOk = false;
+    }
 
-  const status = dbOk ? "ok" : "degraded";
-  res.status(dbOk ? 200 : 503).json({
-    status,
-    service: "cliniqai-api",
-    uptime: Math.floor((Date.now() - startTime) / 1000),
-    timestamp: new Date().toISOString(),
-    checks: { db: dbOk ? "ok" : "error" },
-  });
+    const status = dbOk ? "ok" : "degraded";
+    res.status(dbOk ? 200 : 503).json({
+      status,
+      service: "cliniqai-api",
+      uptime: Math.floor((Date.now() - startTime) / 1000),
+      timestamp: new Date().toISOString(),
+      checks: { db: dbOk ? "ok" : "error" },
+    });
+  }
 });
 
 // API routes
@@ -109,6 +137,14 @@ app.use("/api/clinic", clinicRouter);
 app.use("/api/abdm", abdmRouter);
 // ABDM gateway callback — unauthenticated, whitelist in prod by IP
 app.use("/api/abdm/callback", abdmCallbackRouter);
+// New feature routes
+app.use("/api/whatsapp", whatsappBotRouter);
+app.use("/api/e-prescription", ePrescriptionRouter);
+app.use("/api/events", eventsRouter);
+app.use("/api/abdm-v2", abdmFullRouter);
+app.use("/api/followups", followupsRouter);
+app.use("/api/audit-log", auditLogRouter);
+app.use("/api/analytics", analyticsRouter);
 
 // 404 handler
 app.use((_req, res) => {

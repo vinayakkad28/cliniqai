@@ -14,6 +14,10 @@ import {
   Cog6ToothIcon,
   Bars3Icon,
   XMarkIcon,
+  BellAlertIcon,
+  ChartBarIcon,
+  QueueListIcon,
+  DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 
 const NAV = [
@@ -23,6 +27,10 @@ const NAV = [
   { href: "/dashboard/consultations", label: "Consultations", Icon: ClipboardDocumentListIcon },
   { href: "/dashboard/billing", label: "Billing", Icon: CreditCardIcon },
   { href: "/dashboard/pharmacy", label: "Pharmacy", Icon: BeakerIcon },
+  { href: "/dashboard/follow-ups", label: "Follow-ups", Icon: BellAlertIcon },
+  { href: "/dashboard/analytics", label: "Analytics", Icon: ChartBarIcon },
+  { href: "/dashboard/queue", label: "Queue Display", Icon: QueueListIcon },
+  { href: "/dashboard/audit-log", label: "Audit Log", Icon: DocumentTextIcon },
   { href: "/dashboard/settings", label: "Settings", Icon: Cog6ToothIcon },
 ];
 
