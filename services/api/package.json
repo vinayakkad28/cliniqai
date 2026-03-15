@@ -8,6 +8,9 @@
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio"
@@ -27,6 +30,11 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "pdfkit": "^0.18.0",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.3",
     "uuid": "^9.0.1",
     "zod": "^3.23.4"
   },
@@ -38,9 +46,16 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/morgan": "^1.9.9",
     "@types/node": "^20.12.7",
+    "@types/pdfkit": "^0.17.5",
+    "@types/pino-http": "^6.1.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/supertest": "^7.2.0",
     "@types/uuid": "^9.0.8",
+    "@vitest/coverage-v8": "^4.1.0",
     "prisma": "^5.13.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.8.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^4.1.0"
   }
 }

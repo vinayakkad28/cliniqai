@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authenticate, requireScope } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { emailReceiptQueue } from "../lib/queues.js";
+import { generateInvoicePdf } from "../lib/pdfGenerator.js";
 
 export const billingRouter = Router();
 
@@ -301,4 +302,45 @@ billingRouter.get("/reports/daily", requireScope("billing:read"), async (req, re
   }
 
   res.json({ days: byDate });
+});
+
+// ─── GET /api/billing/invoices/:id/pdf ──────────────────────────────────────
+
+billingRouter.get("/invoices/:id/pdf", requireScope("billing:read"), async (req, res) => {
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: req.params["id"] },
+    include: {
+      patient: { select: { phone: true } },
+      doctor: { select: { name: true, clinicDoctors: { include: { clinic: true }, take: 1 } } },
+    },
+  });
+
+  if (!invoice) {
+    res.status(404).json({ error: "Invoice not found" });
+    return;
+  }
+
+  const clinic = invoice.doctor.clinicDoctors[0]?.clinic;
+
+  const pdfBuffer = await generateInvoicePdf({
+    invoiceId: invoice.id,
+    createdAt: invoice.createdAt,
+    clinic: {
+      name: clinic?.name ?? "CliniqAI Clinic",
+      address: clinic?.address ?? "",
+      gstNumber: clinic?.gstNumber,
+    },
+    doctor: { name: invoice.doctor.name },
+    patient: { phone: invoice.patient.phone },
+    amount: Number(invoice.amount),
+    gstAmount: Number(invoice.gstAmount),
+    total: Number(invoice.total),
+    status: invoice.status,
+    paymentMethod: invoice.paymentMethod,
+    paidAt: invoice.paidAt,
+  });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="invoice-${invoice.id.slice(0, 8)}.pdf"`);
+  res.send(pdfBuffer);
 });

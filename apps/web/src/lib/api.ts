@@ -223,6 +223,12 @@ export const billing = {
     ).toString();
     return `/billing/invoices/export${qs ? `?${qs}` : ""}`;
   },
+  downloadInvoicePdf: (id: string) => {
+    const token = getToken();
+    return fetch(`${BASE}/billing/invoices/${id}/pdf`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).then((r) => r.blob());
+  },
 };
 
 // ─── Clinic ───────────────────────────────────────────────────────────────────
@@ -312,6 +318,12 @@ export const prescriptions = {
   list: (consultationId: string) =>
     request("GET", `/prescriptions?consultationId=${consultationId}`),
   get: (id: string) => request("GET", `/prescriptions/${id}`),
+  downloadPdf: (id: string) => {
+    const token = getToken();
+    return fetch(`${BASE}/prescriptions/${id}/pdf`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).then((r) => r.blob());
+  },
 };
 
 // ─── Pharmacy Queue (Phase 2) ─────────────────────────────────────────────────

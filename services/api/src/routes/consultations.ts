@@ -3,6 +3,8 @@ import { z } from "zod";
 import { authenticate, requireScope } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { fhirClient } from "../lib/fhirClient.js";
+import { emitToDoctor } from "../lib/socketServer.js";
+import { SOCKET_EVENTS } from "../lib/socketEvents.js";
 
 export const consultationsRouter = Router();
 
@@ -65,15 +67,22 @@ consultationsRouter.post("/", requireScope("consultations:write"), async (req, r
     data: { status: "in_progress" },
   });
 
+  const doctorId = req.user!.doctor_id!;
   const consultation = await prisma.consultation.create({
     data: {
       appointmentId,
-      doctorId: req.user!.doctor_id!,
+      doctorId,
       patientId: appointment.patientId,
       fhirEncounterId: fhirEncounter?.id ?? null,
       chiefComplaint,
       status: "in_progress",
     },
+  });
+
+  emitToDoctor(doctorId, SOCKET_EVENTS.CONSULTATION_STATUS_CHANGED, {
+    consultationId: consultation.id,
+    status: "in_progress",
+    patientId: appointment.patientId,
   });
 
   res.status(201).json(consultation);
@@ -209,6 +218,12 @@ consultationsRouter.post("/:id/end", requireScope("consultations:write"), async 
       data: { status: "completed" },
     }),
   ]);
+
+  emitToDoctor(consultation.doctorId, SOCKET_EVENTS.CONSULTATION_STATUS_CHANGED, {
+    consultationId: consultation.id,
+    status: "completed",
+    patientId: consultation.patientId,
+  });
 
   res.json(updated);
 });

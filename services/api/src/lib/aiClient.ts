@@ -3,6 +3,9 @@
  * All AI inference lives in the Python FastAPI service; this is just the bridge.
  */
 
+import { createLogger } from "./logger.js";
+
+const aiLog = createLogger("aiClient");
 const AI_SERVICE_URL = process.env["AI_SERVICE_URL"] ?? "http://localhost:8001";
 const INTERNAL_TOKEN = process.env["AI_INTERNAL_TOKEN"] ?? process.env["INTERNAL_API_TOKEN"] ?? "";
 const IS_DEV = process.env["NODE_ENV"] === "development";
@@ -10,6 +13,7 @@ const IS_DEV = process.env["NODE_ENV"] === "development";
 async function aiPost<T>(path: string, body: unknown): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10000);
+  const start = Date.now();
 
   let res: Response;
   try {
@@ -22,15 +26,22 @@ async function aiPost<T>(path: string, body: unknown): Promise<T> {
       signal: controller.signal,
       body: JSON.stringify(body),
     });
+  } catch (err) {
+    aiLog.error({ path, durationMs: Date.now() - start, err }, "ai_call_failed");
+    throw err;
   } finally {
     clearTimeout(timer);
   }
 
+  const durationMs = Date.now() - start;
+
   if (!res.ok) {
     const text = await res.text();
+    aiLog.error({ path, status: res.status, durationMs }, "ai_call_error");
     throw new Error(`AI service error ${res.status}: ${text}`);
   }
 
+  aiLog.info({ path, status: res.status, durationMs }, "ai_call_ok");
   return res.json() as Promise<T>;
 }
 

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { patients } from "@/lib/api";
+import { toast } from "sonner";
+import FormField from "@/components/FormField";
 
 export default function NewPatientPage() {
   const router = useRouter();
@@ -13,16 +15,29 @@ export default function NewPatientPage() {
     gender: "",
     address: "",
   });
-  const [error, setError] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
   function set(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => ({ ...prev, [field]: "" }));
+  }
+
+  function validate(): boolean {
+    const errs: Record<string, string> = {};
+    if (!form.phone || form.phone.replace(/\D/g, "").length < 10) {
+      errs.phone = "Enter a valid 10+ digit phone number";
+    }
+    if (!form.name.trim()) {
+      errs.name = "Patient name is required";
+    }
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
+    if (!validate()) return;
     setLoading(true);
     try {
       const patient = await patients.create({
@@ -32,28 +47,62 @@ export default function NewPatientPage() {
         ...(form.gender ? { gender: form.gender } : {}),
         ...(form.address ? { address: form.address } : {}),
       });
+      toast.success("Patient registered successfully");
       router.replace(`/dashboard/patients/${patient.id}`);
     } catch (err: unknown) {
-      setError((err as Error).message ?? "Failed to register patient");
+      toast.error((err as Error).message ?? "Failed to register patient");
     } finally {
       setLoading(false);
     }
   }
 
+  const inputClass = (field: string) =>
+    `w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
+      errors[field] ? "border-destructive focus:border-destructive" : "border-border focus:border-primary"
+    }`;
+
   return (
     <div className="max-w-lg">
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">Register New Patient</h1>
-      <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <Field label="Mobile Number *" id="phone" type="tel" required value={form.phone} onChange={(v) => set("phone", v)} placeholder="+91 98765 43210" />
-        <Field label="Full Name *" id="name" required value={form.name} onChange={(v) => set("name", v)} placeholder="Patient full name" />
-        <Field label="Date of Birth" id="dob" type="date" value={form.dateOfBirth} onChange={(v) => set("dateOfBirth", v)} />
-        <div>
-          <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+      <h1 className="mb-6 text-2xl font-heading font-bold text-foreground">Register New Patient</h1>
+      <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
+        <FormField label="Mobile Number" htmlFor="phone" required error={errors.phone}>
+          <input
+            id="phone"
+            type="tel"
+            value={form.phone}
+            onChange={(e) => set("phone", e.target.value)}
+            placeholder="+91 98765 43210"
+            className={inputClass("phone")}
+          />
+        </FormField>
+
+        <FormField label="Full Name" htmlFor="name" required error={errors.name}>
+          <input
+            id="name"
+            type="text"
+            value={form.name}
+            onChange={(e) => set("name", e.target.value)}
+            placeholder="Patient full name"
+            className={inputClass("name")}
+          />
+        </FormField>
+
+        <FormField label="Date of Birth" htmlFor="dob">
+          <input
+            id="dob"
+            type="date"
+            value={form.dateOfBirth}
+            onChange={(e) => set("dateOfBirth", e.target.value)}
+            className={inputClass("dateOfBirth")}
+          />
+        </FormField>
+
+        <FormField label="Gender" htmlFor="gender">
           <select
             id="gender"
             value={form.gender}
             onChange={(e) => set("gender", e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            className={inputClass("gender")}
           >
             <option value="">Select…</option>
             <option value="male">Male</option>
@@ -61,58 +110,36 @@ export default function NewPatientPage() {
             <option value="other">Other</option>
             <option value="unknown">Prefer not to say</option>
           </select>
-        </div>
-        <div>
-          <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+        </FormField>
+
+        <FormField label="Address" htmlFor="address">
           <textarea
             id="address"
             rows={3}
             value={form.address}
             onChange={(e) => set("address", e.target.value)}
             placeholder="Street, City, State, PIN"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            className={inputClass("address")}
           />
-        </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        </FormField>
+
         <div className="flex gap-3 pt-2">
           <button
             type="button"
             onClick={() => router.back()}
-            className="flex-1 rounded-lg border border-gray-300 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="flex-1 cursor-pointer rounded-lg border border-border py-2.5 text-sm font-medium text-card-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+            className="flex-1 cursor-pointer rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
             {loading ? "Registering…" : "Register Patient"}
           </button>
         </div>
       </form>
-    </div>
-  );
-}
-
-function Field({
-  label, id, type = "text", required, value, onChange, placeholder,
-}: {
-  label: string; id: string; type?: string; required?: boolean;
-  value: string; onChange: (v: string) => void; placeholder?: string;
-}) {
-  return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <input
-        id={id}
-        type={type}
-        required={required}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-      />
     </div>
   );
 }
