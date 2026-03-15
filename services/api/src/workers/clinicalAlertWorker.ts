@@ -47,7 +47,7 @@ queue.process(async (job) => {
   const alert = await aiClient.evaluateClinicalAlert({
     patientId,
     consultationId,
-    medications: recentPrescriptions.map((p) => p.id), // AI service resolves via its own DB
+    medications: recentPrescriptions.map((p: typeof recentPrescriptions[number]) => p.id), // AI service resolves via its own DB
   });
 
   if (!alert.hasAlert) {

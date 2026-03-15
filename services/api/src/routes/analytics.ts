@@ -84,7 +84,7 @@ analyticsRouter.get(
     // Calculate average consultation duration in minutes
     let avgConsultationDuration = 12; // default
     if (consultations.length > 0) {
-      const totalMinutes = consultations.reduce((sum, c) => {
+      const totalMinutes = consultations.reduce((sum: number, c: typeof consultations[number]) => {
         const diff = (c.endedAt!.getTime() - c.startedAt.getTime()) / 60_000;
         return sum + diff;
       }, 0);
@@ -106,11 +106,11 @@ analyticsRouter.get(
       totalConsultations,
       totalRevenue: revenueResult._sum.total ?? 0,
       avgConsultationDuration,
-      topDiagnoses: topDiagnoses.map((d) => ({
+      topDiagnoses: topDiagnoses.map((d: typeof topDiagnoses[number]) => ({
         diagnosis: d.diagnosis,
         count: d._count.diagnosis,
       })),
-      appointmentsByType: appointmentsByType.map((a) => ({
+      appointmentsByType: appointmentsByType.map((a: typeof appointmentsByType[number]) => ({
         type: a.type,
         count: a._count.type,
       })),
