@@ -98,7 +98,7 @@ authRouter.post("/register", asyncHandler(async (req, res) => {
   res.status(201).json({
     message: "OTP sent to your mobile number",
     userId: user.id,
-    ...(process.env.NODE_ENV === 'development' && process.env.ALLOW_DEV_OTP === 'true' && devOtp ? { dev_otp: devOtp } : {}),
+    ...((process.env.NODE_ENV === 'development' || process.env.ALLOW_DEV_OTP === 'true') && devOtp ? { dev_otp: devOtp } : {}),
   });
 }));
 
@@ -163,7 +163,7 @@ authRouter.post("/send-otp", asyncHandler(async (req, res) => {
   await prisma.otpCode.create({ data: { phone, codeHash, expiresAt: otpExpiresAt() } });
   const devOtp = await sendOtpSms({ phone, otp, templateId: process.env["MSG91_TEMPLATE_OTP"] ?? "" });
 
-  res.json({ message: "OTP sent", ...(process.env.NODE_ENV === 'development' && process.env.ALLOW_DEV_OTP === 'true' && devOtp ? { dev_otp: devOtp } : {}) });
+  res.json({ message: "OTP sent", ...((process.env.NODE_ENV === 'development' || process.env.ALLOW_DEV_OTP === 'true') && devOtp ? { dev_otp: devOtp } : {}) });
 }));
 
 // ─── POST /api/auth/verify-otp ───────────────────────────────────────────────
