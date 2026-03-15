@@ -5,9 +5,43 @@ import { prisma } from "../lib/prisma.js";
 import { fhirClient } from "../lib/fhirClient.js";
 import { aiClient } from "../lib/aiClient.js";
 import { whatsappPrescriptionQueue, smsReminderQueue } from "../lib/queues.js";
+import { generatePrescriptionPdf } from "../lib/pdfGenerator.js";
+import { computeDigitalSignature, generatePrescriptionQR, verifyDigitalSignature } from "../lib/qrGenerator.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 
 export const prescriptionsRouter = Router();
+
+// ─── GET /api/prescriptions/verify/:id — Public verification endpoint ───────
+
+prescriptionsRouter.get("/verify/:id", async (req, res) => {
+  const prescription = await prisma.prescription.findUnique({
+    where: { id: req.params["id"] },
+    include: {
+      doctor: { select: { name: true, licenseNumber: true, id: true, clinicDoctors: { include: { clinic: { select: { name: true } } }, take: 1 } } },
+    },
+  });
+
+  if (!prescription || !prescription.digitalSignature) {
+    res.json({ valid: false });
+    return;
+  }
+
+  const valid = verifyDigitalSignature(
+    prescription.id,
+    prescription.doctorId,
+    prescription.createdAt,
+    prescription.digitalSignature,
+  );
+
+  res.json({
+    valid,
+    prescriptionId: prescription.id,
+    doctorName: prescription.doctor.name,
+    doctorLicense: prescription.doctor.licenseNumber,
+    issuedAt: prescription.createdAt.toISOString(),
+    clinicName: prescription.doctor.clinicDoctors[0]?.clinic?.name ?? null,
+  });
+});
 
 prescriptionsRouter.use(authenticate);
 
@@ -82,17 +116,25 @@ prescriptionsRouter.post("/", requireScope("prescriptions:write"), asyncHandler(
     .catch(() => null);
 
   const now = new Date();
+  const doctorId = req.user!.doctor_id!;
   const prescription = await prisma.prescription.create({
     data: {
       consultationId,
       patientId: consultation.patientId,
-      doctorId: req.user!.doctor_id!,
-      medications: medications as unknown as any,
+      doctorId,
       fhirMedicationRequestId: fhirMedReq?.id ?? null,
+      medications: medications as unknown as Record<string, unknown>[],
       sentVia: sendVia !== "none" ? sendVia : null,
       sentAt: sendVia !== "none" ? now : null,
       status: sendVia !== "none" ? "sent" : "draft",
     },
+  });
+
+  // Compute digital signature for e-prescription verification
+  const digitalSignature = computeDigitalSignature(prescription.id, doctorId, prescription.createdAt);
+  await prisma.prescription.update({
+    where: { id: prescription.id },
+    data: { digitalSignature },
   });
 
   // Enqueue delivery job
@@ -186,4 +228,86 @@ prescriptionsRouter.post("/:id/send", requireScope("prescriptions:write"), async
   }
 
   res.json({ message: `Prescription queued for delivery via ${bodyResult.data.via}` });
+}));
+
+// ─── GET /api/prescriptions/:id/pdf ─────────────────────────────────────────
+
+prescriptionsRouter.get("/:id/pdf", requireScope("prescriptions:read"), asyncHandler(async (req, res) => {
+  const prescription = await prisma.prescription.findUnique({
+    where: { id: req.params["id"] },
+    include: {
+      patient: { select: { phone: true } },
+      doctor: { select: { name: true, licenseNumber: true, specialties: true, clinicDoctors: { include: { clinic: true }, take: 1 } } },
+    },
+  });
+
+  if (!prescription) {
+    res.status(404).json({ error: "Prescription not found" });
+    return;
+  }
+
+  const clinic = prescription.doctor.clinicDoctors[0]?.clinic;
+  const medications = Array.isArray(prescription.medications) ? prescription.medications as Array<{
+    drug: string; dose: string; frequency: string; duration: string; route: string; notes?: string;
+  }> : [];
+
+  // Generate QR code for the PDF
+  const qrCodePng = await generatePrescriptionQR({
+    prescriptionId: prescription.id,
+    doctorLicenseNumber: prescription.doctor.licenseNumber,
+    doctorName: prescription.doctor.name,
+    createdAt: prescription.createdAt,
+    doctorId: prescription.doctorId,
+  });
+
+  const pdfBufferWithQR = await generatePrescriptionPdf({
+    ...{
+      prescriptionId: prescription.id,
+      createdAt: prescription.createdAt,
+      clinic: {
+        name: clinic?.name ?? "CliniqAI Clinic",
+        address: clinic?.address ?? "",
+        gstNumber: clinic?.gstNumber,
+      },
+      doctor: {
+        name: prescription.doctor.name,
+        licenseNumber: prescription.doctor.licenseNumber,
+        specialties: prescription.doctor.specialties,
+      },
+      patient: { phone: prescription.patient.phone },
+      medications,
+    },
+    qrCodePng,
+  });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="prescription-${prescription.id.slice(0, 8)}.pdf"`);
+  res.send(pdfBufferWithQR);
+}));
+
+// ─── GET /api/prescriptions/:id/qr ─────────────────────────────────────────
+
+prescriptionsRouter.get("/:id/qr", requireScope("prescriptions:read"), asyncHandler(async (req, res) => {
+  const prescription = await prisma.prescription.findUnique({
+    where: { id: req.params["id"] },
+    include: {
+      doctor: { select: { name: true, licenseNumber: true, id: true } },
+    },
+  });
+
+  if (!prescription) {
+    res.status(404).json({ error: "Prescription not found" });
+    return;
+  }
+
+  const qrPng = await generatePrescriptionQR({
+    prescriptionId: prescription.id,
+    doctorLicenseNumber: prescription.doctor.licenseNumber,
+    doctorName: prescription.doctor.name,
+    createdAt: prescription.createdAt,
+    doctorId: prescription.doctorId,
+  });
+
+  res.setHeader("Content-Type", "image/png");
+  res.send(qrPng);
 }));

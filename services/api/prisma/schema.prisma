@@ -519,6 +519,29 @@ model Organization {
   @@schema("org")
 }
 
+model AbdmConsent {
+  id                String   @id @default(uuid())
+  patientId         String   @map("patient_id")
+  doctorId          String   @map("doctor_id")
+  consentRequestId  String   @unique @map("consent_request_id")
+  consentArtefactId String?  @unique @map("consent_artefact_id")
+  purpose           String
+  status            String   @default("requested")
+  hiTypes           String[] @map("hi_types")
+  dateRangeFrom     DateTime @map("date_range_from")
+  dateRangeTo       DateTime @map("date_range_to")
+  expiresAt         DateTime @map("expires_at")
+  privateKey        String?  @map("private_key")
+  nonce             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("abdm_consents")
+  @@schema("org")
+}
+
 // ─────────────────────────────────────────
 // DOCUMENTS (Phase 2 — Document Intelligence)
 // ─────────────────────────────────────────

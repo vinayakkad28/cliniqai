@@ -1,8 +1,9 @@
 import "dotenv/config";
+import { createServer } from "http";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import morgan from "morgan";
+import pinoHttp from "pino-http";
 
 import { authRouter } from "./routes/auth.js";
 import { doctorsRouter } from "./routes/doctors.js";
@@ -21,7 +22,11 @@ import { organizationsRouter } from "./routes/organizations.js";
 import { abdmRouter, abdmCallbackRouter } from "./routes/abdm.js";
 import { clinicRouter } from "./routes/clinic.js";
 import { auditLogger } from "./middleware/auditLogger.js";
+import { correlationId } from "./middleware/correlationId.js";
 import { apiRateLimiter } from "./middleware/rateLimiter.js";
+import { logger } from "./lib/logger.js";
+import { prisma } from "./lib/prisma.js";
+import { initSocketServer } from "./lib/socketServer.js";
 import whatsappBotRouter from "./routes/whatsappBot.js";
 import ePrescriptionRouter from "./routes/ePrescription.js";
 import eventsRouter from "./routes/events.js";
@@ -44,11 +49,12 @@ if (process.env.NODE_ENV !== 'development') {
 
 // Prevent unhandled rejections from crashing the process in dev
 process.on("unhandledRejection", (reason) => {
-  console.error("[unhandledRejection]", reason);
+  logger.error({ err: reason }, "unhandledRejection");
 });
 
 const app = express();
 const PORT = process.env["PORT"] ?? 3001;
+const startTime = Date.now();
 
 // Security headers
 app.use(helmet());
@@ -66,8 +72,17 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// HTTP request logging (no PHI — morgan uses predefined tokens only)
-app.use(morgan("[:date[iso]] :method :url :status :response-time ms"));
+// Correlation ID (must come before pino-http so it's available for logging)
+app.use(correlationId);
+
+// Structured HTTP request logging (replaces morgan — no PHI logged)
+app.use(
+  pinoHttp({
+    logger,
+    autoLogging: { ignore: (req) => (req.url ?? "").startsWith("/health") },
+    customProps: (req) => ({ correlationId: (req as express.Request).correlationId }),
+  }),
+);
 
 // Distributed tracing
 app.use(tracingMiddleware);
@@ -78,13 +93,28 @@ app.use("/api", apiRateLimiter);
 // Audit logging (every authenticated request)
 app.use("/api", auditLogger);
 
-// Health check (unauthenticated) — enhanced with dependency checks
+// Health check (unauthenticated) — enhanced with dependency checks + DB fallback
 app.get("/health", async (_req, res) => {
   try {
     const health = await healthCheck();
     res.status(health.status === "healthy" ? 200 : 503).json(health);
   } catch {
-    res.json({ status: "ok", service: "cliniqai-api", timestamp: new Date().toISOString() });
+    // Fallback: basic DB ping
+    let dbOk = true;
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      dbOk = false;
+    }
+
+    const status = dbOk ? "ok" : "degraded";
+    res.status(dbOk ? 200 : 503).json({
+      status,
+      service: "cliniqai-api",
+      uptime: Math.floor((Date.now() - startTime) / 1000),
+      timestamp: new Date().toISOString(),
+      checks: { db: dbOk ? "ok" : "error" },
+    });
   }
 });
 
@@ -122,13 +152,16 @@ app.use((_req, res) => {
 });
 
 // Global error handler
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err.stack);
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  (req.log ?? logger).error({ err }, "unhandled route error");
   res.status(500).json({ error: "Internal server error" });
 });
 
-app.listen(PORT, () => {
-  console.log(`[api] CliniqAI API running on http://localhost:${PORT}`);
+const httpServer = createServer(app);
+initSocketServer(httpServer);
+
+httpServer.listen(PORT, () => {
+  logger.info({ port: PORT }, "CliniqAI API running");
 });
 
 export default app;

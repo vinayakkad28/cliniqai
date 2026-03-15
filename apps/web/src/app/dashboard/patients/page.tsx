@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { patients, type Patient } from "@/lib/api";
+import { TableSkeleton } from "@/components/Skeleton";
+import EmptyState from "@/components/EmptyState";
+import { UsersIcon } from "@heroicons/react/24/outline";
 
 export default function PatientsPage() {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [data, setData] = useState<{ data: Patient[]; meta: { total: number; pages: number } } | null>(null);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
@@ -29,10 +32,10 @@ export default function PatientsPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Patients</h1>
+        <h1 className="text-2xl font-heading font-bold text-foreground">Patients</h1>
         <Link
           href="/dashboard/patients/new"
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          className="cursor-pointer rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
           + Register Patient
         </Link>
@@ -44,54 +47,61 @@ export default function PatientsPage() {
           placeholder="Search by phone or name…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          aria-label="Search patients"
+          className="flex-1 rounded-lg border border-border px-4 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
         />
         <button
           type="submit"
-          className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+          className="cursor-pointer rounded-lg bg-muted px-4 py-2 text-sm font-medium text-card-foreground hover:bg-muted/80"
         >
           Search
         </button>
       </form>
 
       {loading ? (
-        <div className="py-20 text-center text-sm text-gray-400">Loading…</div>
+        <TableSkeleton rows={5} cols={5} />
       ) : !data?.data.length ? (
-        <div className="py-20 text-center text-sm text-gray-400">No patients found.</div>
+        <EmptyState
+          icon={<UsersIcon className="h-8 w-8 text-muted-foreground" />}
+          title={query ? "No patients found" : "No patients yet"}
+          description={query ? "Try a different search term" : "Register your first patient to get started"}
+          actionLabel={query ? undefined : "Register Patient"}
+          actionHref={query ? undefined : "/dashboard/patients/new"}
+        />
       ) : (
-        <>
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-muted/50">
                 <tr>
                   {["Name", "Phone", "Tags", "Registered", "Actions"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border/50">
                 {data.data.map((pt) => (
-                  <tr key={pt.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{pt.name || "—"}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{pt.phone}</td>
+                  <tr key={pt.id} className="hover:bg-muted/30">
+                    <td className="px-4 py-3 text-sm font-medium text-card-foreground">{pt.name || "—"}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">{pt.phone}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {pt.tags.map(({ tag }) => (
-                          <span key={tag} className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                          <span key={tag} className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
                             {tag}
                           </span>
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
+                    <td className="px-4 py-3 text-sm text-muted-foreground">
                       {new Date(pt.createdAt).toLocaleDateString("en-IN")}
                     </td>
                     <td className="px-4 py-3">
                       <Link
                         href={`/dashboard/patients/${pt.id}`}
-                        className="text-xs text-blue-600 hover:underline"
+                        className="text-xs text-primary hover:underline cursor-pointer"
                       >
                         View
                       </Link>
@@ -100,28 +110,28 @@ export default function PatientsPage() {
                 ))}
               </tbody>
             </table>
-            <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3 text-xs text-gray-400">
-              <span>{data.meta.total} patient{data.meta.total !== 1 ? "s" : ""}</span>
-              <div className="flex gap-2">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="rounded px-2 py-1 disabled:opacity-40 hover:bg-gray-100"
-                >
-                  ← Prev
-                </button>
-                <span>Page {page} / {data.meta.pages}</span>
-                <button
-                  disabled={page >= data.meta.pages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="rounded px-2 py-1 disabled:opacity-40 hover:bg-gray-100"
-                >
-                  Next →
-                </button>
-              </div>
+          </div>
+          <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted-foreground">
+            <span>{data.meta.total} patient{data.meta.total !== 1 ? "s" : ""}</span>
+            <div className="flex gap-2">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+                className="cursor-pointer rounded px-2 py-1 disabled:opacity-40 hover:bg-muted"
+              >
+                ← Prev
+              </button>
+              <span>Page {page} / {data.meta.pages}</span>
+              <button
+                disabled={page >= data.meta.pages}
+                onClick={() => setPage((p) => p + 1)}
+                className="cursor-pointer rounded px-2 py-1 disabled:opacity-40 hover:bg-muted"
+              >
+                Next →
+              </button>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

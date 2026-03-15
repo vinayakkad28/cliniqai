@@ -3,6 +3,8 @@ import { z } from "zod";
 import { authenticate, requireScope } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { smsReminderQueue } from "../lib/queues.js";
+import { emitToDoctor } from "../lib/socketServer.js";
+import { SOCKET_EVENTS } from "../lib/socketEvents.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 
 export const appointmentsRouter = Router();
@@ -231,6 +233,7 @@ appointmentsRouter.patch("/:id", requireScope("appointments:write"), asyncHandle
     return;
   }
 
+  const oldStatus = appointment.status;
   const updated = await prisma.appointment.update({
     where: { id: appointment.id },
     data: {
@@ -239,6 +242,15 @@ appointmentsRouter.patch("/:id", requireScope("appointments:write"), asyncHandle
       ...(result.data.notes !== undefined ? { notes: result.data.notes } : {}),
     },
   });
+
+  if (result.data.status && result.data.status !== oldStatus) {
+    emitToDoctor(appointment.doctorId, SOCKET_EVENTS.APPOINTMENT_STATUS_CHANGED, {
+      appointmentId: appointment.id,
+      oldStatus,
+      newStatus: result.data.status,
+      patientId: appointment.patientId,
+    });
+  }
 
   res.json(updated);
 }));
