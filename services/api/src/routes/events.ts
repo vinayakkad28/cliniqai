@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -6,8 +6,17 @@ const router = Router();
 // Connected clients map
 const clients = new Map<string, Response>();
 
+// SSE auth: EventSource can't set headers, so accept token from query string
+function sseAuth(req: Request, res: Response, next: NextFunction): void {
+  const queryToken = req.query.token as string | undefined;
+  if (queryToken && !req.headers.authorization) {
+    req.headers.authorization = `Bearer ${queryToken}`;
+  }
+  authenticate(req, res, next);
+}
+
 // SSE endpoint for real-time updates
-router.get('/stream', authenticate, (req: Request, res: Response) => {
+router.get('/stream', sseAuth, (req: Request, res: Response) => {
   const doctorId = req.user!.doctor_id;
   const clinicId = req.user!.clinic_id;
   const clientId = `${doctorId}-${Date.now()}`;
