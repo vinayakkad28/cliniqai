@@ -3,7 +3,12 @@
  * All requests include the Bearer token from localStorage.
  */
 
-const BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001/api";
+// Use relative /api path in browser (Vercel rewrites to Railway API)
+// Only use full URL for server-side rendering
+const envUrl = process.env["NEXT_PUBLIC_API_URL"];
+const BASE = typeof window !== "undefined"
+  ? "/api"
+  : envUrl ? `${envUrl.replace(/\/$/, "")}/api` : "http://localhost:3001/api";
 export const AI_BASE = process.env["NEXT_PUBLIC_AI_URL"] ?? "http://localhost:8001";
 
 function getToken(): string | null {
