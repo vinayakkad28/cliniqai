@@ -123,7 +123,7 @@ prescriptionsRouter.post("/", requireScope("prescriptions:write"), asyncHandler(
       patientId: consultation.patientId,
       doctorId,
       fhirMedicationRequestId: fhirMedReq?.id ?? null,
-      medications: medications as unknown as Record<string, unknown>[],
+      medications: medications as unknown as import("@prisma/client").Prisma.InputJsonValue,
       sentVia: sendVia !== "none" ? sendVia : null,
       sentAt: sendVia !== "none" ? now : null,
       status: sendVia !== "none" ? "sent" : "draft",

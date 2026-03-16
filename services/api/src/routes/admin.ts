@@ -18,7 +18,7 @@ adminRouter.get(
       orderBy: { createdAt: "desc" },
     });
 
-    const result = clinics.map((c) => ({
+    const result = clinics.map((c: typeof clinics[number]) => ({
       id: c.id,
       name: c.name,
       address: c.address,

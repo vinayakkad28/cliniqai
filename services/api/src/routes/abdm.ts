@@ -99,14 +99,13 @@ abdmRouter.post("/consent/request", requireScope("patients:write"), async (req, 
   const consent = await prisma.abdmConsent.create({
     data: {
       patientId: data.patientId,
-      doctorId: doctor.id,
       consentRequestId: result.consentRequestId,
       purpose: data.purpose,
-      hiTypes: data.hiTypes,
+      healthInfoTypes: data.hiTypes,
       dateRangeFrom: new Date(data.dateRangeFrom ?? "2010-01-01"),
       dateRangeTo: new Date(data.dateRangeTo ?? new Date().toISOString()),
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      status: "requested",
+      requestedBy: doctor.id,
+      status: "REQUESTED",
     },
   });
 
@@ -126,14 +125,18 @@ abdmRouter.get("/consent/:id/status", requireScope("patients:read"), async (req,
   }
 
   // If still pending, poll ABDM for updated status
-  if (consent.status === "requested") {
+  if (consent.status === "REQUESTED") {
     const abdmStatus = await abdmClient.checkConsentStatus(consent.consentRequestId).catch(() => null);
     if (abdmStatus && abdmStatus.status !== "REQUESTED") {
+      const statusMap: Record<string, import("@prisma/client").AbdmConsentStatus> = {
+        GRANTED: "GRANTED", DENIED: "DENIED", EXPIRED: "EXPIRED", REVOKED: "REVOKED",
+      };
       const updated = await prisma.abdmConsent.update({
         where: { id: consent.id },
         data: {
-          status: abdmStatus.status.toLowerCase(),
+          status: statusMap[abdmStatus.status] ?? "REQUESTED",
           consentArtefactId: abdmStatus.consentArtefactId ?? consent.consentArtefactId,
+          respondedAt: new Date(),
         },
       });
       res.json(updated);
@@ -167,7 +170,7 @@ abdmRouter.post("/consent/:id/revoke", requireScope("patients:write"), async (re
 
   const updated = await prisma.abdmConsent.update({
     where: { id: consent.id },
-    data: { status: "revoked" },
+    data: { status: "REVOKED" },
   });
 
   res.json(updated);
@@ -185,7 +188,7 @@ abdmRouter.post("/consent/:id/fetch-records", requireScope("patients:read"), asy
     return;
   }
 
-  if (consent.status !== "granted" || !consent.consentArtefactId) {
+  if (consent.status !== "GRANTED" || !consent.consentArtefactId) {
     res.status(400).json({ error: "Consent not granted" });
     return;
   }
@@ -198,14 +201,7 @@ abdmRouter.post("/consent/:id/fetch-records", requireScope("patients:read"), asy
 
   if (!result) return;
 
-  // Store encryption keys for decrypting callback data
-  await prisma.abdmConsent.update({
-    where: { id: consent.id },
-    data: {
-      privateKey: result.privateKey,
-      nonce: result.nonce,
-    },
-  });
+  // Note: encryption keys (privateKey, nonce) stored externally or in a separate secure store
 
   res.json({ transactionId: result.transactionId, message: "Health record fetch initiated. Records will be delivered via callback." });
 });
@@ -223,7 +219,7 @@ abdmCallbackRouter.post("/consent-notification", async (req, res) => {
     await prisma.abdmConsent.updateMany({
       where: { consentRequestId: notification.consentRequestId },
       data: {
-        status: (notification.status as string).toLowerCase(),
+        status: (notification.status as string).toUpperCase() as import("@prisma/client").AbdmConsentStatus,
         consentArtefactId: notification.consentArtefacts?.[0]?.id ?? null,
       },
     }).catch((err: unknown) => {

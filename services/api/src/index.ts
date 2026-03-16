@@ -56,6 +56,9 @@ const app = express();
 const PORT = process.env["PORT"] ?? 3001;
 const startTime = Date.now();
 
+// Trust proxy (Railway, Cloud Run, etc.)
+app.set("trust proxy", 1);
+
 // Security headers
 app.use(helmet());
 
