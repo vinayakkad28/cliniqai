@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { api } from '@/lib/api';
+import { api, API_BASE } from '@/lib/api';
 import { QRCode } from '@/components/QRCode';
 
 interface EPrescriptionData {
@@ -34,7 +34,7 @@ export default function EPrescriptionPage() {
   const { id } = useParams();
   const { token } = useAuth();
   const router = useRouter();
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
+  const apiUrl = API_BASE;
   const printRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<EPrescriptionData | null>(null);
   const [loading, setLoading] = useState(true);

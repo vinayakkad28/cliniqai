@@ -6,8 +6,7 @@ import { toast } from "sonner";
 import { CardSkeleton, TableSkeleton } from "@/components/Skeleton";
 import EmptyState from "@/components/EmptyState";
 import { CreditCardIcon, PrinterIcon } from "@heroicons/react/24/outline";
-
-const BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001/api";
+import { API_BASE as BASE } from "@/lib/api";
 
 interface Invoice {
   id: string;

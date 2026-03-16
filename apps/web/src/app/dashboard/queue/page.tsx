@@ -66,7 +66,7 @@ export default function QueueDisplayPage() {
 
   useEffect(() => {
     if (!token) return;
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiBase = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001");
     const es = new EventSource(`${apiBase}/api/events?token=${token}`);
 
     es.addEventListener("queue:update", (e) => {

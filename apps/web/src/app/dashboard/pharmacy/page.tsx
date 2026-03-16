@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { pharmacy, pharmacyQueue, auth, type RxQueueItem } from "@/lib/api";
-
-const BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001/api";
+import { pharmacy, pharmacyQueue, auth, API_BASE as BASE, type RxQueueItem } from "@/lib/api";
 
 interface Medicine {
   id: string;

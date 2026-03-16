@@ -63,7 +63,8 @@ authRouter.post("/register", asyncHandler(async (req, res) => {
     return;
   }
 
-  const { phone, name, licenseNumber, email, password } = result.data;
+  const { phone, name, licenseNumber, password } = result.data;
+  const email = result.data.email?.toLowerCase();
 
   // Rate limit check
   const rateLimitError = checkOtpRateLimit(phone);
@@ -215,7 +216,7 @@ authRouter.post("/login", asyncHandler(async (req, res) => {
   }
 
   const { email, password } = result.data;
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
 
   if (!user || !user.passwordHash) {
     res.status(401).json({ error: "Invalid credentials" });
