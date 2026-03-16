@@ -36,7 +36,7 @@ export default function AppointmentDetailPage({ params }: { params: { id: string
 
   useEffect(() => {
     appointments.get(id)
-      .then(setAppt)
+      .then((data) => setAppt(data as unknown as AppointmentDetail))
       .catch(() => null)
       .finally(() => setLoading(false));
   }, [id]);
