@@ -114,7 +114,10 @@ export function useRealtime(token: string | null) {
   useEffect(() => {
     if (!token) return;
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    // Use relative /api path in browser (Vercel rewrites to Railway API)
+    const baseUrl = typeof window !== "undefined"
+      ? "/api"
+      : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001') + '/api';
     clientRef.current = new RealtimeClient(baseUrl, token);
     clientRef.current.connect();
     client = clientRef.current;
