@@ -142,11 +142,12 @@ export async function healthCheck(): Promise<HealthCheck> {
   };
 
   const allUp = Object.values(checks).every((c) => c === 'up');
-  const anyDown = Object.values(checks).some((c) => c === 'down');
+  // Only the database is critical — AI/FHIR/Redis are optional services
+  const critical = checks.database === 'up';
 
   return {
     service: SERVICE_NAME,
-    status: allUp ? 'healthy' : anyDown ? 'unhealthy' : 'degraded',
+    status: critical ? (allUp ? 'healthy' : 'degraded') : 'unhealthy',
     version: process.env.APP_VERSION || '1.0.0',
     uptime: Math.floor((Date.now() - startTime) / 1000),
     checks,

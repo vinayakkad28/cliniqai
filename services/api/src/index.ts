@@ -100,7 +100,7 @@ app.use("/api", auditLogger);
 app.get("/health", async (_req, res) => {
   try {
     const health = await healthCheck();
-    res.status(health.status === "healthy" ? 200 : 503).json(health);
+    res.status(health.status === "unhealthy" ? 503 : 200).json(health);
   } catch {
     // Fallback: basic DB ping
     let dbOk = true;
