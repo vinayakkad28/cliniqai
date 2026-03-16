@@ -8,14 +8,18 @@ import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
 type Step = "phone" | "otp";
+type LoginMode = "phone" | "email";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
 
+  const [mode, setMode] = useState<LoginMode>("phone");
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -62,6 +66,34 @@ export default function LoginPage() {
     }
   }
 
+  async function handleEmailLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email || !password) {
+      setError("Email and password are required");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    try {
+      const tokens = await auth.login(email, password);
+      await login(tokens.accessToken, tokens.refreshToken);
+      router.replace("/dashboard");
+    } catch (err: unknown) {
+      const msg = (err as Error).message ?? "Invalid credentials";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function switchMode(newMode: LoginMode) {
+    setMode(newMode);
+    setStep("phone");
+    setError("");
+    setOtp("");
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-4">
       {/* Decorative background elements */}
@@ -72,7 +104,7 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-md rounded-2xl bg-card/90 backdrop-blur-sm shadow-lg border border-border/50 p-8">
         {/* Brand */}
-        <div className="mb-8 text-center">
+        <div className="mb-6 text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary mb-4">
             <svg className="w-7 h-7 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -82,7 +114,76 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-muted-foreground">AI-powered clinical platform for doctors</p>
         </div>
 
-        {step === "phone" ? (
+        {/* Mode Tabs */}
+        <div className="flex mb-6 rounded-lg bg-muted p-1">
+          <button
+            type="button"
+            onClick={() => switchMode("phone")}
+            className={`flex-1 cursor-pointer rounded-md py-2 text-sm font-medium transition-colors ${
+              mode === "phone"
+                ? "bg-card text-card-foreground shadow-sm"
+                : "text-muted-foreground hover:text-card-foreground"
+            }`}
+          >
+            Phone / OTP
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMode("email")}
+            className={`flex-1 cursor-pointer rounded-md py-2 text-sm font-medium transition-colors ${
+              mode === "email"
+                ? "bg-card text-card-foreground shadow-sm"
+                : "text-muted-foreground hover:text-card-foreground"
+            }`}
+          >
+            Email / Password
+          </button>
+        </div>
+
+        {mode === "email" ? (
+          <form onSubmit={handleEmailLogin} className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-card-foreground mb-1">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                required
+                placeholder="doctor@example.com"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setError(""); }}
+                className={`w-full rounded-lg border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
+                  error ? "border-destructive" : "border-border focus:border-primary"
+                }`}
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-card-foreground mb-1">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(""); }}
+                className={`w-full rounded-lg border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
+                  error ? "border-destructive" : "border-border focus:border-primary"
+                }`}
+              />
+            </div>
+            {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full cursor-pointer rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              {loading ? "Signing in…" : "Sign In"}
+            </button>
+          </form>
+        ) : step === "phone" ? (
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-card-foreground mb-1">
