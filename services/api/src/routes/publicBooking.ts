@@ -70,10 +70,10 @@ publicBookingRouter.get("/doctors/:id/slots", asyncHandler(async (req, res) => {
   // Generate all possible slots
   const allSlots: string[] = [];
   for (const wh of workingHours) {
-    const [startH, startM] = wh.startTime.split(":").map(Number);
-    const [endH, endM] = wh.endTime.split(":").map(Number);
-    const startMins = startH * 60 + startM;
-    const endMins = endH * 60 + endM;
+    const parts = wh.startTime.split(":").map(Number);
+    const endParts = wh.endTime.split(":").map(Number);
+    const startMins = (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
+    const endMins = (endParts[0] ?? 0) * 60 + (endParts[1] ?? 0);
     const duration = wh.slotDurationMins || 15;
 
     for (let m = startMins; m + duration <= endMins; m += duration) {
@@ -113,8 +113,8 @@ publicBookingRouter.get("/doctors/:id/slots", asyncHandler(async (req, res) => {
   const availableSlots = allSlots.filter((slot) => {
     if (bookedSlots.has(slot)) return false;
     if (isToday) {
-      const [h, m] = slot.split(":").map(Number);
-      const slotMins = h * 60 + m;
+      const slotParts = slot.split(":").map(Number);
+      const slotMins = (slotParts[0] ?? 0) * 60 + (slotParts[1] ?? 0);
       const nowMins = istNow.getUTCHours() * 60 + istNow.getUTCMinutes();
       if (slotMins <= nowMins) return false;
     }
