@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
-const BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001/api";
+import { API_BASE as BASE } from "@/lib/api";
 
 interface LabResult {
   id: string;

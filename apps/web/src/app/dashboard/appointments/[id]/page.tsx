@@ -35,10 +35,7 @@ export default function AppointmentDetailPage({ params }: { params: { id: string
   const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
-    fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001/api"}/appointments/${id}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("cliniqai_access_token") ?? ""}` },
-    })
-      .then((r) => r.json())
+    appointments.get(id)
       .then(setAppt)
       .catch(() => null)
       .finally(() => setLoading(false));

@@ -2,8 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-
-const BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001/api";
+import { API_BASE as BASE } from "@/lib/api";
 const AI_BASE = process.env["NEXT_PUBLIC_AI_URL"] ?? "http://localhost:8001";
 const AI_TOKEN = process.env["NEXT_PUBLIC_AI_INTERNAL_TOKEN"] ?? "";
 

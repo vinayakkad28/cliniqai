@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { api } from '@/lib/api';
+import { api, API_BASE } from '@/lib/api';
 
 interface AbdmStatus {
   abhaNumber: string | null;
@@ -76,7 +76,7 @@ export default function AbdmPage() {
   async function handleLinkAbha() {
     setActionLoading('link');
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/abdm/abha/link`, {
+      const res = await fetch(`${API_BASE}/abdm/abha/link`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ patientId, abhaNumber: abhaInput }),
@@ -99,7 +99,7 @@ export default function AbdmPage() {
   async function handleCreateAbha() {
     setActionLoading('create');
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/abdm/abha/create`, {
+      const res = await fetch(`${API_BASE}/abdm/abha/create`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ patientId, aadhaarNumber: aadhaarInput }),
@@ -121,7 +121,7 @@ export default function AbdmPage() {
   async function handleVerifyOtp() {
     setActionLoading('verify');
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/abdm/abha/verify-otp`, {
+      const res = await fetch(`${API_BASE}/abdm/abha/verify-otp`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ patientId, txnId, otp: otpInput }),
@@ -145,7 +145,7 @@ export default function AbdmPage() {
   async function handleRequestConsent() {
     setActionLoading('consent');
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/abdm/consent/request`, {
+      const res = await fetch(`${API_BASE}/abdm/consent/request`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -171,7 +171,7 @@ export default function AbdmPage() {
   async function handlePushRecords(consultationId: string) {
     setActionLoading('push');
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/abdm/records/push`, {
+      const res = await fetch(`${API_BASE}/abdm/records/push`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ patientId, consultationId }),

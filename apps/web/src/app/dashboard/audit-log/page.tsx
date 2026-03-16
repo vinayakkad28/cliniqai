@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { auditLog, type AuditEntry } from "@/lib/api";
+import { auditLog, API_BASE as BASE, type AuditEntry } from "@/lib/api";
 
 // ─── Action badge config ────────────────────────────────────────────────────
 
@@ -16,8 +16,6 @@ const ACTION_CONFIG: Record<string, { bg: string; text: string }> = {
 
 const ALL_ACTIONS = ["CREATE", "UPDATE", "DELETE", "VIEW", "LOGIN", "LOGOUT"];
 const ALL_RESOURCES = ["patient", "appointment", "consultation", "prescription", "billing"];
-
-const BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001/api";
 
 // ─── Component ──────────────────────────────────────────────────────────────
 

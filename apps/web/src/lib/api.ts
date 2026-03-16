@@ -9,6 +9,7 @@ const envUrl = process.env["NEXT_PUBLIC_API_URL"];
 const BASE = typeof window !== "undefined"
   ? "/api"
   : envUrl ? `${envUrl.replace(/\/$/, "")}/api` : "http://localhost:3001/api";
+export { BASE as API_BASE };
 export const AI_BASE = process.env["NEXT_PUBLIC_AI_URL"] ?? "http://localhost:8001";
 
 function getToken(): string | null {
@@ -222,6 +223,8 @@ export const appointments = {
     ).toString();
     return request<AppointmentListResponse>("GET", `/appointments${qs ? `?${qs}` : ""}`);
   },
+  get: (id: string) =>
+    request<Appointment & { consultation?: { id: string; status: string; startedAt: string } | null }>("GET", `/appointments/${id}`),
   create: (data: { patientId: string; scheduledAt: string; type?: string; notes?: string }) =>
     request<Appointment>("POST", "/appointments", data),
   update: (id: string, data: { status?: string; notes?: string }) =>

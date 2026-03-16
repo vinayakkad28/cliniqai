@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-const BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001/api";
+import { API_BASE as BASE } from "@/lib/api";
 
 interface Invoice {
   id: string;
